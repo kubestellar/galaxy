@@ -1,0 +1,48 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - galaxy.kubestellar.io
+  resources:
+  - clustermetrics
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - galaxy.kubestellar.io
+  resources:
+  - clustermetrics/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - galaxy.kubestellar.io
+  resources:
+  - clustermetrics/status
+  verbs:
+  - get
+  - patch
+  - update

@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- galaxy_v1alpha1_clustermetrics.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples
