@@ -1,0 +1,39 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: rolebinding
+    app.kubernetes.io/instance: shadow-pods-role-rolebinding
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: kubeflex
+    app.kubernetes.io/part-of: kubeflex
+    app.kubernetes.io/managed-by: kustomize
+  name: shadow-pods-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: shadow-pods-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "shadow-pods.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrolebinding
+    app.kubernetes.io/instance: shadow-pods-role-clusterrolebinding
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: kubeflex
+    app.kubernetes.io/part-of: kubeflex
+    app.kubernetes.io/managed-by: kustomize
+  name: shadow-pods-role-clusterrolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: shadow-pods-clusterrole
+subjects:
+- kind: ServiceAccount
+  name: {{ include "shadow-pods.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}

@@ -1,0 +1,13 @@
+apiVersion: control.kubestellar.io/v1alpha1
+kind: BindingPolicy
+metadata:
+  name: workflows
+spec:
+  wantSingletonReportedState: true
+  clusterSelectors:
+  - matchLabels:
+      name: cluster1
+  downsync:
+  - objectSelectors:
+    - matchLabels: 
+        kubestellar.io/cluster: cluster1

@@ -151,8 +151,8 @@ undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.
 .PHONY: chart
 chart: manifests kustomize
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(shell echo ${IMG} | sed 's/\(:.*\)v/\1/')
-	$(KUSTOMIZE) build config/default > ../chart/cluster-metrics/templates/operator.yaml
-	$(KUSTOMIZE) build config/crd > ../chart/cluster-metrics/crds/crds.yaml
+	$(KUSTOMIZE) build config/default > ../charts/cluster-metrics/templates/operator.yaml
+	$(KUSTOMIZE) build config/crd > ../charts/cluster-metrics/crds/crds.yaml
 
 .PHONY: ko-local-build
 ko-local-build: 
@@ -165,7 +165,7 @@ kind-load-image:
 
 .PHONY: install-local-chart
 install-local-chart: chart kind-load-image
-	if [ ! -n "$(CONTEXT)" ] ; then helm  upgrade --install --create-namespace -n clustermetrics-system cluster-metrics ../chart/cluster-metrics ${HELM_OPTS} ; else helm  --kube-context ${CONTEXT} upgrade --install --create-namespace -n clustermetrics-system cluster-metrics ../chart/cluster-metrics ${HELM_OPTS} ; fi
+	if [ ! -n "$(CONTEXT)" ] ; then helm  upgrade --install --create-namespace -n clustermetrics-system cluster-metrics ../charts/cluster-metrics ${HELM_OPTS} ; else helm  --kube-context ${CONTEXT} upgrade --install --create-namespace -n clustermetrics-system cluster-metrics ../charts/cluster-metrics ${HELM_OPTS} ; fi
 
 ##@ Dependencies
 

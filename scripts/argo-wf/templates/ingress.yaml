@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: argo-to-ingress
+  namespace: argo
+spec:
+  ports:
+  - name: https
+    port: 443
+    protocol: TCP
+    targetPort: 2746
+  selector:
+    app: argo-server
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argo-server-ingress
+  namespace: argo
+  annotations:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: argo.localtest.me
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: argo-to-ingress
+            port:
+              name: https
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-ui
+  namespace: argo
+spec:
+  ports:
+  - name: dashboard
+    port: 80
+    protocol: TCP
+    targetPort: 9001
+  selector:
+    app: minio
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: minio-ui-ingress
+  namespace: argo
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: minio.localtest.me
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: minio-ui
+            port:
+              name: dashboard              

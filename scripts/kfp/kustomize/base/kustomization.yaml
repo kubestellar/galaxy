@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - https://github.com/kubeflow/pipelines/manifests/kustomize/base/installs/generic?ref=2.2.0
+  - https://github.com/kubeflow/pipelines/manifests/kustomize/base/metadata/base?ref=2.2.0
+  - https://github.com/kubeflow/pipelines/manifests/kustomize/third-party/argo/installs/namespace?ref=2.2.0
+
+# Identifier for application manager to apply ownerReference.
+# The ownerReference ensures the resources get garbage collected
+# when application is deleted.
+
+# !!! If you want to customize the namespace,
+# please also update base/cache-deployer/cluster-scoped/cache-deployer-clusterrolebinding.yaml
+namespace: kubeflow
+labels:
+  - includeSelectors: true
+    pairs:
+      application-crd-id: kubeflow-pipelines
+
+patchesStrategicMerge:
+- patch-pipeline-install-config.yaml

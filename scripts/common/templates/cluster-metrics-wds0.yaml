@@ -1,0 +1,7 @@
+apiVersion: integrations.kubestellar.io/v1alpha1
+kind: ClusterMetrics
+metadata:
+  labels:
+    app.kubernetes.io/name: clustermetrics
+  name: local
+spec:

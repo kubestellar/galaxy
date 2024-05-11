@@ -1,0 +1,62 @@
+apiVersion: tenancy.kflex.kubestellar.org/v1alpha1
+kind: PostCreateHook
+metadata:
+  name: kubestellar
+  labels:
+    kflex.kubestellar.io/cptype: wds
+spec:
+  templates: 
+  - apiVersion: batch/v1
+    kind: Job
+    metadata:
+      name: "{{.HookName}}"
+    spec:
+      template:
+        spec:
+          serviceAccountName: "{{.ControlPlaneName}}"
+          containers:
+          - name: "{{.HookName}}"
+            image: quay.io/kubestellar/helm:3.14.0
+            imagePullPolicy: IfNotPresent
+            args:
+              - upgrade
+              - --install
+              - -n
+              - "{{.Namespace}}"
+              - kubestellar
+              - oci://ghcr.io/kubestellar/kubestellar/controller-manager-chart
+              - --version
+              - "0.22.0"
+              - --set
+              - "ControlPlaneName={{.ControlPlaneName}}"
+            env:
+            - name: XDG_CACHE_HOME
+              value: /tmp/helm/.cache
+          - name: "{{.HookName}}-transport-plugin"
+            image: quay.io/kubestellar/helm:3.14.0
+            args:
+            - upgrade
+            - --install
+            - ocm-transport-plugin
+            - oci://ghcr.io/kubestellar/ocm-transport-plugin/chart/ocm-transport-plugin
+            - --version
+            - "0.1.7"
+            - --namespace
+            - "{{.Namespace}}"
+            - --set
+            - "transport_cp_name={{.itsName}}"
+            - --set
+            - "wds_cp_name={{.ControlPlaneName}}"
+            env:
+            - name: HELM_CONFIG_HOME
+              value: /tmp
+            - name: HELM_CACHE_HOME
+              value: /tmp
+            # - name: KUBECONFIG
+            #   value: /etc/kube/config-incluster
+            # volumeMounts:
+            # - mountPath: /etc/kube
+            #   name: kubeconfig
+            #   readOnly: true       
+          restartPolicy: Never
+      backoffLimit: 1

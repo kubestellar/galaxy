@@ -1,0 +1,6 @@
+# Default values for ks-integration.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# default name for the cluster from where the metrics are generated
+clusterName: local

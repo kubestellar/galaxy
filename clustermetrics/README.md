@@ -112,3 +112,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
+## Kubebuilder
+
+This project was scaffolded using these kubebuilder commands:
+
+```shell
+kubebuilder init --domain kubestellar.io --repo kubestellar/galaxy/mc-scheduling
+kubebuilder create api --group galaxy --version v1alpha1 --kind ClusterMetrics
+```

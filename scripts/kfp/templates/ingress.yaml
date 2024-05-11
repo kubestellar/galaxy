@@ -1,0 +1,38 @@
+---
+# KFP Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ml-pipeline-ui-ingress
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: kfp.localtest.me
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: ml-pipeline-ui
+            port:
+              name: http
+---
+# Minio Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: minio-ui-ingress
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: minio.localtest.me
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: minio-ui
+            port:
+              name: dashboard
