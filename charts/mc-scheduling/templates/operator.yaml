@@ -1,13 +1,4 @@
 apiVersion: v1
-kind: Namespace
-metadata:
-  labels:
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: mc-scheduling
-    control-plane: controller-manager
-  name: mc-scheduling-system
----
-apiVersion: v1
 kind: ServiceAccount
 metadata:
   labels:
@@ -63,31 +54,29 @@ metadata:
   name: mc-scheduling-manager-role
 rules:
 - apiGroups:
-  - argoproj.io.kubestellar.io
+  - argoproj.io
   resources:
   - workflows
   verbs:
-  - create
-  - delete
   - get
   - list
   - patch
   - update
   - watch
 - apiGroups:
-  - argoproj.io.kubestellar.io
+  - integrations.kubestellar.io
   resources:
-  - workflows/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - argoproj.io.kubestellar.io
-  resources:
-  - workflows/status
+  - clustermetrics
   verbs:
   - get
-  - patch
-  - update
+  - list
+  - watch
+- apiGroups:
+  - integrations.kubestellar.io
+  resources:
+  - clustermetrics/status
+  verbs:
+  - get
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -239,9 +228,7 @@ spec:
         - --health-probe-bind-address=:8081
         - --metrics-bind-address=127.0.0.1:8080
         - --leader-elect
-        command:
-        - /manager
-        image: ko.local/mc-scheduler:c0446e2
+        image: ko.local/mc-scheduler:5d76e37
         livenessProbe:
           httpGet:
             path: /healthz

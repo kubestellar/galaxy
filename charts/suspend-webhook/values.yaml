@@ -59,7 +59,7 @@ resources: {}
 volumes:
 - name: certs
   secret:
-    secretName: ksi-ks-integration 
+    secretName: suspend-webhook
     optional: false
 
 # Additional volumeMounts on the output Deployment definition.

@@ -51,12 +51,6 @@ spec:
             - name: HELM_CONFIG_HOME
               value: /tmp
             - name: HELM_CACHE_HOME
-              value: /tmp
-            # - name: KUBECONFIG
-            #   value: /etc/kube/config-incluster
-            # volumeMounts:
-            # - mountPath: /etc/kube
-            #   name: kubeconfig
-            #   readOnly: true       
+              value: /tmp 
           restartPolicy: Never
       backoffLimit: 1

@@ -118,3 +118,5 @@ limitations under the License.
 kubebuilder init --domain kubestellar.io --repo kubestellar/galaxy/shadow-pods
 kubebuilder create api --group argoproj.io --version v1alpha1 --kind Workflow --controller=true --resource=false
 ```
+
+kubebuilder create webhook --group argoproj.io --version v1alpha1 --kind Workflow

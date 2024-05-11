@@ -1,7 +1,7 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "ks-integration.name" -}}
+{{- define "suspend-webhook.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
@@ -10,7 +10,7 @@ Create a default fully qualified app name.
 We truncate at 63 chars because some Kubernetes name fields are limited to this (by the DNS naming spec).
 If release name contains chart name it will be used as a full name.
 */}}
-{{- define "ks-integration.fullname" -}}
+{{- define "suspend-webhook.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -26,16 +26,16 @@ If release name contains chart name it will be used as a full name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "ks-integration.chart" -}}
+{{- define "suspend-webhook.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Common labels
 */}}
-{{- define "ks-integration.labels" -}}
-helm.sh/chart: {{ include "ks-integration.chart" . }}
-{{ include "ks-integration.selectorLabels" . }}
+{{- define "suspend-webhook.labels" -}}
+helm.sh/chart: {{ include "suspend-webhook.chart" . }}
+{{ include "suspend-webhook.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -45,17 +45,17 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{/*
 Selector labels
 */}}
-{{- define "ks-integration.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "ks-integration.name" . }}
+{{- define "suspend-webhook.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "suspend-webhook.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
 Create the name of the service account to use
 */}}
-{{- define "ks-integration.serviceAccountName" -}}
+{{- define "suspend-webhook.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
-{{- default (include "ks-integration.fullname" .) .Values.serviceAccount.name }}
+{{- default (include "suspend-webhook.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}

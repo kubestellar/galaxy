@@ -6,8 +6,8 @@ metadata:
     app.kubernetes.io/name: role
     app.kubernetes.io/instance: leader-election-role
     app.kubernetes.io/component: rbac
-    app.kubernetes.io/created-by: ks-integration
-    app.kubernetes.io/part-of: ks-integration
+    app.kubernetes.io/created-by: suspend-webhook
+    app.kubernetes.io/part-of: suspend-webhook
   name: leader-election-role
 rules:
 - apiGroups:

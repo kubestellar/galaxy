@@ -24,9 +24,7 @@ trap cleanup EXIT
 
 : install cluster-metrics controller on all clusters
 
-cd  ${WORK_DIR}
-git clone git@github.ibm.com:dettori/clustermetrics.git
-cd clustermetrics
+cd ${SCRIPT_DIR}/../../clustermetrics
 make ko-local-build
 
 contexts=("${clusters[@]}")
@@ -42,19 +40,16 @@ for context in "${contexts[@]}"; do
     kubectl --context ${context} apply -f ${SCRIPT_DIR}/templates/cluster-metrics-rbac.yaml
 done
 
-: install mc-scheduler on core cluster
-
-cd  ${WORK_DIR}
-git clone git@github.ibm.com:dettori/mc-scheduling.git
-cd mc-scheduling
-kubectl config use-context wds0
-make ko-local-build
-CLUSTER=kubeflex make install-local-chart
-
-
 : deploy cluster-metrics objects for each cluster
 
 clusters+=("wds0")
 for cluster in "${clusters[@]}"; do
     kubectl --context wds0 apply -f ${SCRIPT_DIR}/templates/cluster-metrics-${cluster}.yaml
 done
+
+: install mc-scheduler on core cluster
+
+cd ${SCRIPT_DIR}/../../mc-scheduling
+kubectl config use-context wds0
+make ko-local-build
+CLUSTER=kubeflex make install-local-chart

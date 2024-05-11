@@ -5,28 +5,26 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - argoproj.io.kubestellar.io
+  - argoproj.io
   resources:
   - workflows
   verbs:
-  - create
-  - delete
   - get
   - list
   - patch
   - update
   - watch
 - apiGroups:
-  - argoproj.io.kubestellar.io
+  - integrations.kubestellar.io
   resources:
-  - workflows/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - argoproj.io.kubestellar.io
-  resources:
-  - workflows/status
+  - clustermetrics
   verbs:
   - get
-  - patch
-  - update
+  - list
+  - watch
+- apiGroups:
+  - integrations.kubestellar.io
+  resources:
+  - clustermetrics/status
+  verbs:
+  - get

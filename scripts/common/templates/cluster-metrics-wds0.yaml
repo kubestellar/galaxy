@@ -1,4 +1,4 @@
-apiVersion: integrations.kubestellar.io/v1alpha1
+apiVersion: galaxy.kubestellar.io/v1alpha1
 kind: ClusterMetrics
 metadata:
   labels:

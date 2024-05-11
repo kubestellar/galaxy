@@ -16,6 +16,9 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
+ARCH := $(shell go env GOARCH)
+OS := $(shell go env GOOS)
+
 # CONTAINER_TOOL defines the container tool to be used for building images.
 # Be aware that the target commands are only tested with Docker which is
 # scaffolded by default. However, you might want to replace it to use other
@@ -162,7 +165,7 @@ kind-load-webhook-image:
 
 .PHONY: install-webhook-local-chart
 install-webhook-local-chart: kind-load-webhook-image
-	helm upgrade --install -n ksi-system --create-namespace  --set image.repository=ko.local/${WEBHOOK_CMD_NAME} --set=image.tag=${IMAGE_TAG} ksi chart/ks-integration 
+	helm upgrade --install -n ksi-system --create-namespace  --set image.repository=ko.local/${WEBHOOK_CMD_NAME} --set=image.tag=${IMAGE_TAG} suspend-webhook ../charts/suspend-webhook
 
 
 ##@ Dependencies

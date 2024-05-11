@@ -73,7 +73,6 @@ done
 
 : install kfp on kubeflex and add services and ingresses
 
-
 contexts=(wds0);
 for context in "${contexts[@]}"; do
   kubectl --context ${context} apply -k "github.com/kubeflow/pipelines/manifests/kustomize/cluster-scoped-resources?ref=$PIPELINE_VERSION"
@@ -141,16 +140,17 @@ rm ${SCRIPT_DIR}/kustomize/base/patch-pipeline-install-config.yaml
 
 : install mutating admission webhook for workflows on wds0
 
-cd ${SCRIPT_DIR}/..
+cd ${SCRIPT_DIR}/../../suspend-webhook
 kubectl config use-context wds0
 make webhook-local-build && make install-webhook-local-chart
 
 : wait for admission webhook to be up
 
-wait-for-cmd '(($(wrap-cmd kubectl --context wds0 get deployments -n ksi-system -o jsonpath='{.status.readyReplicas}' ksi-ks-integration 2>/dev/null || echo 0) >= 1))'
+wait-for-cmd '(($(wrap-cmd kubectl --context wds0 get deployments -n ksi-system -o jsonpath='{.status.readyReplicas}' suspend-webhook 2>/dev/null || echo 0) >= 1))'
 
 : install shadow pods controller
 
+cd ${SCRIPT_DIR}/../../shadow-pods
 kubectl config use-context wds0
 make loki-logger-local-build && make shadow-local-build && make install-shadow-local-chart
 

@@ -1,14 +1,14 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "ks-integration.fullname" . }}
+  name: {{ include "suspend-webhook.fullname" . }}
   labels:
-    {{- include "ks-integration.labels" . | nindent 4 }}
+    {{- include "suspend-webhook.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "ks-integration.selectorLabels" . | nindent 6 }}
+      {{- include "suspend-webhook.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -16,7 +16,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "ks-integration.labels" . | nindent 8 }}
+        {{- include "suspend-webhook.labels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -25,7 +25,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "ks-integration.serviceAccountName" . }}
+      serviceAccountName: {{ include "suspend-webhook.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
