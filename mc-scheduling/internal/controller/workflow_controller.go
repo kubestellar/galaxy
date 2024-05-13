@@ -64,8 +64,8 @@ type NamedResourceRequirements struct {
 	ResourceReqs corev1.ResourceRequirements
 }
 
-//+kubebuilder:rbac:groups=integrations.kubestellar.io,resources=clustermetrics,verbs=get;list;watch
-//+kubebuilder:rbac:groups=integrations.kubestellar.io,resources=clustermetrics/status,verbs=get
+//+kubebuilder:rbac:groups=galaxy.kubestellar.io,resources=clustermetrics,verbs=get;list;watch
+//+kubebuilder:rbac:groups=galaxy.kubestellar.io,resources=clustermetrics/status,verbs=get
 //+kubebuilder:rbac:groups=argoproj.io,resources=workflows,verbs=get;list;watch;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to

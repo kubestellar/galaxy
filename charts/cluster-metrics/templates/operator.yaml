@@ -297,7 +297,7 @@ spec:
         - --metrics-bind-address=127.0.0.1:8080
         - --leader-elect
         - --metrics-name={{.Values.clusterName}}
-        image: ko.local/cluster-metrics:5d76e37
+        image: ko.local/cluster-metrics:2e3ab97
         livenessProbe:
           httpGet:
             path: /healthz

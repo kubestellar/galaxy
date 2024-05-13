@@ -64,7 +64,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - integrations.kubestellar.io
+  - galaxy.kubestellar.io
   resources:
   - clustermetrics
   verbs:
@@ -72,7 +72,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - integrations.kubestellar.io
+  - galaxy.kubestellar.io
   resources:
   - clustermetrics/status
   verbs:
@@ -228,7 +228,7 @@ spec:
         - --health-probe-bind-address=:8081
         - --metrics-bind-address=127.0.0.1:8080
         - --leader-elect
-        image: ko.local/mc-scheduler:5d76e37
+        image: ko.local/mc-scheduler:2e3ab97
         livenessProbe:
           httpGet:
             path: /healthz

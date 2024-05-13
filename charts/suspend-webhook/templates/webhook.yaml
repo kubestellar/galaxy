@@ -15,10 +15,10 @@
 #
 
 {{- $ca := genCA "/C=US/ST=NY/L=Yorktown/O=KubeStellar CA" 1000 }}
-{{- $cn := printf "%s-%s" .Release.Name .Chart.Name }}
-{{- $n1 := printf "%s-%s.%s" .Release.Name .Chart.Name .Release.Namespace }}
-{{- $n2 := printf "%s-%s.%s.svc" .Release.Name .Chart.Name .Release.Namespace }}
-{{- $n3 := printf "%s-%s.%s.svc.%s" .Release.Name .Chart.Name .Release.Namespace .Values.global.clusterSubDomain }}
+{{- $cn := printf "%s" .Release.Name }}
+{{- $n1 := printf "%s.%s" .Release.Name .Release.Namespace }}
+{{- $n2 := printf "%s.%s.svc" .Release.Name .Release.Namespace }}
+{{- $n3 := printf "%s.%s.svc.%s" .Release.Name .Release.Namespace .Values.global.clusterSubDomain }}
 {{- $cert := genSignedCert $cn nil (list $n1 $n2 $n3) 1000 $ca }}
 apiVersion: v1
 kind: Secret

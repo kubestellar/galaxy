@@ -3,7 +3,7 @@ kind: ClusterRole
 metadata:
   name: clustermetrics-access
 rules:
-- apiGroups: ["integrations.kubestellar.io"]
+- apiGroups: ["galaxy.kubestellar.io"]
   resources: ["clustermetrics"]
   verbs: ["get", "list", "watch", "create", "update", "patch"]
 ---

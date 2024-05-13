@@ -15,7 +15,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - integrations.kubestellar.io
+  - galaxy.kubestellar.io
   resources:
   - clustermetrics
   verbs:
@@ -23,7 +23,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - integrations.kubestellar.io
+  - galaxy.kubestellar.io
   resources:
   - clustermetrics/status
   verbs:
