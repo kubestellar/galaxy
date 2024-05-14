@@ -21,7 +21,7 @@ def create_runs(number_of_runs):
             },
             enable_caching=False,
         )
-        time.sleep(60)
+        #time.sleep(60)
 
 
 def main():

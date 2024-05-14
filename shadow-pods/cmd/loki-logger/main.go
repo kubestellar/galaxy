@@ -3,36 +3,84 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
-	"os/signal"
+	"sort"
+	"strconv"
 	"time"
-
-	"github.com/gorilla/websocket"
 )
 
 const (
-	defaultLokiBaseURL = "ws://loki.loki:3100"
+	defaultTimeInterval     = "10s"
+	defaultInitialTimeRange = "24h"
+	limit                   = "4000"
+	defaultContainer        = "main"
+	defaultLokiBaseURL      = "http://loki.loki:3100"
 )
 
-// Define struct to match the nested JSON structure.
-type StreamEntry struct {
-	Stream struct {
-		App        string `json:"app"`
-		Container  string `json:"container"`
-		Filename   string `json:"filename"`
-		Job        string `json:"job"`
-		Namespace  string `json:"namespace"`
-		NodeName   string `json:"node_name"`
-		Pod        string `json:"pod"`
-		StreamType string `json:"stream"`
-	} `json:"stream"`
+type LogData struct {
+	Status string `json:"status"`
+	Data   Data   `json:"data"`
+}
+
+type Data struct {
+	ResultType string   `json:"resultType"`
+	Result     []Result `json:"result"`
+}
+
+type Result struct {
+	Stream Stream     `json:"stream"`
 	Values [][]string `json:"values"`
 }
 
-type LogData struct {
-	Streams []StreamEntry `json:"streams"`
+type Stream struct {
+	Stream    string `json:"stream"`
+	App       string `json:"app"`
+	Container string `json:"container"`
+	Filename  string `json:"filename"`
+	Job       string `json:"job"`
+	Namespace string `json:"namespace"`
+	NodeName  string `json:"node_name"`
+	Pod       string `json:"pod"`
+}
+
+type Query struct {
+	URL       string
+	Namespace string
+	Pod       string
+	NodeName  string
+	Container string
+	Limit     string
+}
+
+func (q *Query) Run(start string) (string, error) {
+	params := url.Values{}
+	params.Set("start", start)
+	params.Set("query", fmt.Sprintf(`{pod="%s",namespace="%s",container="%s",node_name="%s"}`,
+		q.Pod, q.Namespace, q.Container, q.NodeName))
+	params.Set("limit", limit)
+
+	queryUrl := fmt.Sprintf("%s/loki/api/v1/query_range?%s", q.URL, params.Encode())
+
+	resp, err := http.Get(queryUrl)
+	if err != nil {
+		return "", fmt.Errorf("error querying Loki: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("error reading response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("non-OK HTTP status code: %d", resp.StatusCode)
+	}
+
+	return string(body), nil
 }
 
 func main() {
@@ -65,66 +113,110 @@ func main() {
 		log.Printf("LOKI_BASE_URL: %s", lokiBaseURL)
 	}
 
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
-
-	// Construct the WebSocket URL for streaming logs from Loki
-	//	url := "ws://localhost:3100/loki/api/v1/tail?query={pod=\"tutorial-data-passing-rlqf4-357838429\",namespace=\"kubeflow\"}"
-	url := fmt.Sprintf("%s/loki/api/v1/tail?query={pod=\"%s\",namespace=\"%s\",node_name=\"%s\"}", lokiBaseURL, pod, namespace, hostName)
-
-	header := http.Header{}
-
-	c, _, err := websocket.DefaultDialer.Dial(url, header)
-	if err != nil {
-		log.Fatal("dial:", err)
+	container := os.Getenv("CONTAINER")
+	if container == "" {
+		log.Printf("CONTAINER not defined, using default: %s", defaultContainer)
+		container = defaultContainer
+	} else {
+		log.Printf("CONTAINER: %s", container)
 	}
-	defer c.Close()
 
-	done := make(chan struct{})
+	initialTimeRangeStr := os.Getenv("INITIAL_TIME_RANGE")
+	if initialTimeRangeStr == "" {
+		log.Printf("INITIAL_TIME_RANGE not defined, using default: %s", defaultInitialTimeRange)
+		initialTimeRangeStr = defaultInitialTimeRange
+	} else {
+		log.Printf("INITIAL_TIME_RANGE: %s", initialTimeRangeStr)
+	}
 
-	go func() {
-		defer close(done)
-		for {
-			_, message, err := c.ReadMessage()
-			if err != nil {
-				log.Println("read:", err)
-				return
-			}
+	timeIntervalStr := os.Getenv("TIME_INTERVAL")
+	if timeIntervalStr == "" {
+		log.Printf("TIME_INTERVAL not defined, using default: %s", defaultTimeInterval)
+		timeIntervalStr = defaultTimeInterval
+	} else {
+		log.Printf("TIME_INTERVAL: %s", timeIntervalStr)
+	}
 
-			var logData LogData
-			err = json.Unmarshal([]byte(message), &logData)
-			if err != nil {
-				log.Fatalf("Failed to parse JSON: %v", err)
-			}
+	initialTimeInterval, err := time.ParseDuration(initialTimeRangeStr)
+	if err != nil {
+		log.Fatal("error converting initialTimeRangeStr", err)
+	}
 
-			for _, stream := range logData.Streams {
-				for _, value := range stream.Values {
-					fmt.Printf("%s\n", value[1])
-				}
-			}
+	timeInterval, err := time.ParseDuration(timeIntervalStr)
+	if err != nil {
+		log.Fatal("error converting timeIntervalStr", err)
+	}
 
-		}
-	}()
+	query := Query{
+		URL:       lokiBaseURL,
+		Namespace: namespace,
+		NodeName:  hostName,
+		Pod:       pod,
+		Container: container,
+		Limit:     limit,
+	}
+
+	initialStartTime := fmt.Sprintf("%d", time.Now().Add(-initialTimeInterval).UnixNano())
+	start := initialStartTime
 
 	for {
-		select {
-		case <-done:
-			return
-		case <-interrupt:
-			log.Println("interrupt")
+		if start == "" {
+			continue
+		}
 
-			// Cleanly close the connection by sending a close message and then waiting
-			// for the server to close the connection.
-			err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-			if err != nil {
-				log.Println("write close:", err)
-				return
-			}
-			select {
-			case <-done:
-			case <-time.After(time.Second):
+		body, err := query.Run(start)
+		if err != nil {
+			fmt.Println("Error:", err)
+			if body != "" {
+				fmt.Println("Body:", body)
 			}
 			return
 		}
+
+		var logData LogData
+
+		err = json.Unmarshal([]byte(body), &logData)
+		if err != nil {
+			fmt.Println("JSON unmarshal error:", err)
+			continue
+		}
+
+		values := [][]string{}
+
+		for _, result := range logData.Data.Result {
+			values = append(values, result.Values...)
+		}
+
+		// Sort the slice by the timestamp as string in descending order.
+		sort.Slice(values, func(i, j int) bool {
+			return values[i][0] < values[j][0]
+		})
+
+		// Print the sorted slice
+		for _, value := range values {
+			fmt.Printf("%s\n", value[1])
+		}
+
+		time.Sleep(timeInterval)
+
+		logSize := len(values)
+		if logSize >= 1 {
+			// define the start for the next query just 1 ms more than the last one so that the results
+			// are not overlapping with the already printed log
+			start, err = incrememtTimestampString(values[logSize-1][0], 1)
+			if err != nil {
+				log.Printf("incrememtTimestampString: error converting timestamp: %s", err)
+			}
+		}
 	}
+}
+
+// convertAndIncrementTimeStamp - converts the string timestamp to an int64, adds the supplied increment and
+// converts back to string
+func incrememtTimestampString(tsMs string, increment int64) (string, error) {
+	ts, err := strconv.ParseInt(tsMs, 10, 64)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%d", ts+increment), nil
 }
