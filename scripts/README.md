@@ -49,12 +49,12 @@ Before running the script, make sure to run `go mod tidy`
 For RHEL 9, follow [these instructions](./RHEL-KS-install.md#increasing-limits)
 
 
-## Running the script
+## Running the scripts
 
-Note: at the start the script deletes yor current kubeflex, cluster1 and cluster2 clusters, and
+Note: at the start each script deletes yor current kubeflex, cluster1 and cluster2 clusters, and
 backs up and delete your default kubeconfig in ~/.kube/config.
 
-Run the script:
+For each scenario (e.g. kfp), change directory `cd <scenario>` and run the `install-all` script:
 
 ```shell
 ./instal-all.sh
