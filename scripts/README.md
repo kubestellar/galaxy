@@ -19,7 +19,7 @@ following environments:
   - kind v0.22.0
 
 
-See how to setup the RHEL VM [here](docs/RHEL-KS-install.md).
+See how to install the pre-reqs for a RHEL 9 VM [here](./RHEL-KS-install.md).
 
 ## Preparation
 
@@ -46,7 +46,7 @@ provision:
 
 Before running the script, make sure to run `go mod tidy`
 
-For RHEL 9, follow [these instructions](docs/RHEL-KS-install.md#increasing-limits)
+For RHEL 9, follow [these instructions](./RHEL-KS-install.md#increasing-limits)
 
 
 ## Running the script
