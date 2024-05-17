@@ -1,5 +1,6 @@
 # shadow-pods
-// TODO(user): Add simple overview of use/purpose
+
+Creates "shadow-pods" to reflect logs from remote clusters.
 
 ## Description
 // TODO(user): An in-depth paragraph about your project and overview of use

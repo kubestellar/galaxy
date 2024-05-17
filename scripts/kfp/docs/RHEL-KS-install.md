@@ -1,15 +1,15 @@
-# Installation instructions for KS on RHEL 9
+# Prereqs Installation instructions for KS on RHEL 9
 
 ## Installing prereqs
 
 ### Account setup
 
 ```shell
-useradd paolo
-passwd paolo
-usermod -aG wheel paolo
+useradd <user>
+passwd <user>
+usermod -aG wheel <user>
 visudo 
-# add "paolo ALL=(ALL) NOPASSWD: ALL" 
+# add "<user> ALL=(ALL) NOPASSWD: ALL" 
 ```
 ### Installing docker
 

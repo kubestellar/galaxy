@@ -1,5 +1,6 @@
 # suspend-webhook
-// TODO(user): Add simple overview of use/purpose
+
+Suspends batch workloads that support the "suspend" flag. Currently only Argo Workflow is implemented.
 
 ## Description
 // TODO(user): An in-depth paragraph about your project and overview of use

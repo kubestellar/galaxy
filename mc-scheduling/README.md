@@ -1,5 +1,6 @@
 # mc-scheduling
-// TODO(user): Add simple overview of use/purpose
+
+Multi-cluster scheduling framework supporting pluggable schedulers.
 
 ## Description
 // TODO(user): An in-depth paragraph about your project and overview of use
