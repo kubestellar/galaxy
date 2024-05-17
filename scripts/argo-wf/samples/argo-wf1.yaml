@@ -10,6 +10,7 @@ metadata:
     workflows.argoproj.io/description: |
       This is a simple hello world example.
 spec:
+  suspend: true
   entrypoint: whalesay
   templates:
   - name: whalesay

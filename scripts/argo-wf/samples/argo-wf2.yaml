@@ -5,11 +5,12 @@ metadata:
   namespace: argo
   labels:
     workflows.argoproj.io/archive-strategy: "false"
-    kubestellar.io/cluster: cluster1
+    kubestellar.io/cluster: cluster2
   annotations:
     workflows.argoproj.io/description: |
       This is a simple hello world 2 example.
 spec:
+  suspend: true
   entrypoint: whalesay
   templates:
   - name: whalesay

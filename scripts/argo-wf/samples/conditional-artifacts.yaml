@@ -2,6 +2,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
   generateName: conditional-artifacts-
+  namespace: argo
   labels:
     workflows.argoproj.io/test: "true"
     kubestellar.io/cluster: cluster1
@@ -15,6 +16,7 @@ metadata:
       will be set to the executed step's output.
     workflows.argoproj.io/version: '>= 3.1.0'
 spec:
+  suspend: true
   entrypoint: main
   templates:
     - name: main

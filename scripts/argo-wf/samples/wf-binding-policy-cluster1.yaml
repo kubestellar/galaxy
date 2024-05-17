@@ -1,7 +1,7 @@
 apiVersion: control.kubestellar.io/v1alpha1
 kind: BindingPolicy
 metadata:
-  name: workflows
+  name: workflows-cluster1
 spec:
   wantSingletonReportedState: true
   clusterSelectors:

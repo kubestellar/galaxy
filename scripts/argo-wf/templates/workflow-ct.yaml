@@ -1,0 +1,11 @@
+apiVersion: control.kubestellar.io/v1alpha1
+kind: CustomTransform
+metadata:
+  name: workflow
+spec:
+  apiGroup: argoproj.io
+  resource: workflows
+  remove:
+  - $.spec.suspend
+  - $.metadata.labels["workflows.argoproj.io/completed"]
+  - $.metadata.labels["workflows.argoproj.io/phase"]

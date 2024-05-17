@@ -10,7 +10,7 @@ import (
 	"net/http"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -27,11 +27,6 @@ var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
 	Version  string
-)
-
-const (
-	controlLabelKey           = "kubestellar.io/cluster"
-	container_count_threshold = 2
 )
 
 func main() {
@@ -119,24 +114,14 @@ func (h *WorkflowWebhookHandler) Handle(ctx context.Context, req admission.Reque
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	// this is used for the standalone argo workflows demo
-	// Modify the .spec.enable field based on the presence of the control label key
-	// also, make sure logs are always archived in S3
-	// if workflow.Labels != nil {
-	// 	if _, ok := workflow.Labels[controlLabelKey]; ok {
-	// 		workflow.Spec.Suspend = pointer.Bool(true)
-	// 		workflow.Spec.ArchiveLogs = pointer.Bool(true)
-	// 	}
-	// }
-
-	// KFP demo
-
-	// ensure workflow archives logs
-	workflow.Spec.ArchiveLogs = pointer.Bool(true)
-
-	// if label not present, it has not yet been scheduled, then set to suspend = true
-	if _, ok := workflow.Labels[controlLabelKey]; !ok {
-		workflow.Spec.Suspend = pointer.Bool(true)
+	// suspend the workflow if flag is not initially set
+	// a scheduler can then change the Suspend flag to false
+	// for local execution or add labels for remote execution
+	// via KubeStellar
+	if workflow.Spec.Suspend == nil {
+		workflow.Spec.Suspend = ptr.To(true)
+		// also, ensure workflow archives logs
+		workflow.Spec.ArchiveLogs = ptr.To(true)
 	}
 
 	// Create the patch operations
@@ -147,23 +132,4 @@ func (h *WorkflowWebhookHandler) Handle(ctx context.Context, req admission.Reque
 
 	// Return the patch response
 	return admission.PatchResponseFromRaw(req.Object.Raw, marshaledWorkflow)
-}
-
-// func shouldBeRemoteByAnnotation(workflow *v1alpha1.Workflow) bool {
-// 	if ann, ok := workflow.Annotations["pipelines.kubeflow.org/run_name"]; ok {
-// 		if strings.Contains(ann, "remote") {
-// 			return true
-// 		}
-// 	}
-// 	return false
-// }
-
-func countContainers(workflow *v1alpha1.Workflow) int {
-	count := 0
-	for _, template := range workflow.Spec.Templates {
-		if template.Container != nil {
-			count++
-		}
-	}
-	return count
 }

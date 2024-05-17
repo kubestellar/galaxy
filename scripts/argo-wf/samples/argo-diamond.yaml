@@ -9,9 +9,11 @@ apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata:
   generateName: dag-diamond-
+  namespace: argo
   labels:
     kubestellar.io/cluster: cluster1
 spec:
+  suspend: true
   entrypoint: diamond
   templates:
   - name: diamond
