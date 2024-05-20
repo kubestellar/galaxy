@@ -26,7 +26,7 @@ install_webhook=$1
 : install argo workflows on all clusters
 
 # pre-load images that experienced docker registry rate limit when loading multiple times in kind
-images=(docker/whalesay:latest alpine:3.7 python:alpine3.6 minio/minio:RELEASE.2022-11-17T23-20-09Z)
+images=(alpine:3.7 python:alpine3.6 minio/minio:RELEASE.2022-11-17T23-20-09Z)
 for image in "${images[@]}"; do
   docker pull ${image}
   for cluster in "${clusters[@]}"; do
