@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: ko.local/mc-scheduler
-  newTag: b67ffc0
+  newTag: 439831d

@@ -50,7 +50,7 @@ components:
         message:
           parameterType: STRING
         num_steps:
-          defaultValue: 2000.0
+          defaultValue: 200.0
           isOptional: true
           parameterType: NUMBER_INTEGER
     outputDefinitions:
@@ -149,8 +149,8 @@ deploymentSpec:
           \ of type bool.\n    input_bool: bool,\n    # An input parameter of type\
           \ dict.\n    input_dict: Dict[str, int],\n    # An input parameter of type\
           \ List[str].\n    input_list: List[str],\n    # An input parameter of type\
-          \ int with a default value.\n    num_steps: int = 2000,\n):\n    import\
-          \ time\n    import sys\n    \"\"\"Dummy Training step.\"\"\"\n    with open(dataset_one_path,\
+          \ int with a default value.\n    num_steps: int = 200,\n):\n    import time\n\
+          \    import sys\n    \"\"\"Dummy Training step.\"\"\"\n    with open(dataset_one_path,\
           \ 'r') as input_file:\n        dataset_one_contents = input_file.read()\n\
           \n    with open(dataset_two.path, 'r') as input_file:\n        dataset_two_contents\
           \ = input_file.read()\n\n    line = (f'dataset_one_contents: {dataset_one_contents}\
@@ -161,8 +161,8 @@ deploymentSpec:
           \ type {type(input_list)} \\n')\n\n    with open(model.path, 'w') as output_file:\n\
           \        for i in range(num_steps):\n            print(f\"Writing step {i}\
           \ to file\", file=sys.stderr, flush=True)\n            output_file.write('Step\
-          \ {}\\n{}\\n=====\\n'.format(i, line))\n            time.sleep(30)\n\n \
-          \   # model is an instance of Model artifact, which has a .metadata dictionary\n\
+          \ {}\\n{}\\n=====\\n'.format(i, line))\n            time.sleep(3)\n\n  \
+          \  # model is an instance of Model artifact, which has a .metadata dictionary\n\
           \    # to store arbitrary metadata for the output artifact.\n    model.metadata['accuracy']\
           \ = 0.9\n\n"
         image: python:3.10

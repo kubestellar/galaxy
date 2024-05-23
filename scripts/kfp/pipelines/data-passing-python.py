@@ -103,7 +103,7 @@ def train(
     # An input parameter of type List[str].
     input_list: List[str],
     # An input parameter of type int with a default value.
-    num_steps: int = 2000,
+    num_steps: int = 200,
 ):
     import time
     import sys
@@ -125,7 +125,7 @@ def train(
         for i in range(num_steps):
             print(f"Writing step {i} to file", file=sys.stderr, flush=True)
             output_file.write('Step {}\n{}\n=====\n'.format(i, line))
-            time.sleep(30)
+            time.sleep(3)
 
     # model is an instance of Model artifact, which has a .metadata dictionary
     # to store arbitrary metadata for the output artifact.
