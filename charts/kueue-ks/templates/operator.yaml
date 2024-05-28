@@ -3,18 +3,18 @@ kind: ServiceAccount
 metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: clustermetrics
-  name: clustermetrics-controller-manager
-  namespace: clustermetrics-system
+    app.kubernetes.io/name: kueue-ks
+  name: kueue-ks-controller-manager
+  namespace: kueue-ks-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: clustermetrics
-  name: clustermetrics-leader-election-role
-  namespace: clustermetrics-system
+    app.kubernetes.io/name: kueue-ks
+  name: kueue-ks-leader-election-role
+  namespace: kueue-ks-system
 rules:
 - apiGroups:
   - ""
@@ -53,8 +53,8 @@ kind: ClusterRole
 metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: clustermetrics
-  name: clustermetrics-clustermetrics-editor-role
+    app.kubernetes.io/name: kueue-ks
+  name: kueue-ks-kueue-ks-editor-role
 rules:
 - apiGroups:
   - galaxy.kubestellar.io
@@ -74,14 +74,86 @@ rules:
   - clustermetrics/status
   verbs:
   - get
+- apiGroups:
+  - control.kubestellar.io
+  resources:
+  - bindingpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch 
+- apiGroups:
+  - kueue.x-k8s.io
+  resources:
+  - admissionchecks
+  - workloads
+  - clusterqueues
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kueue.x-k8s.io
+  resources:
+  - admissionchecks/status
+  verbs:
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch    
+- apiGroups:
+  - kueue.x-k8s.io
+  resources:
+  - workloads/status
+  verbs:
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch            
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - delete
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kubeflow.org
+  resources:
+  - pytorchjobs
+  - pytorchjobs/status
+  verbs:
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch            
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: clustermetrics
-  name: clustermetrics-clustermetrics-viewer-role
+    app.kubernetes.io/name: kueue-ks
+  name: kueue-ks-kueue-ks-viewer-role
 rules:
 - apiGroups:
   - galaxy.kubestellar.io
@@ -97,11 +169,82 @@ rules:
   - clustermetrics/status
   verbs:
   - get
----
+- apiGroups:
+  - control.kubestellar.io
+  resources:
+  - bindingpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch 
+- apiGroups:
+  - kueue.x-k8s.io
+  resources:
+  - admissionchecks
+  - workloads
+  - clusterqueues
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch   
+- apiGroups:
+  - kueue.x-k8s.io
+  resources:
+  - admissionchecks/status
+  verbs:
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch    
+- apiGroups:
+  - kueue.x-k8s.io
+  resources:
+  - workloads/status
+  verbs:
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch      
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - delete
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kubeflow.org
+  resources:
+  - pytorchjobs
+  - pytorchjobs/status
+  verbs:
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch    
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: clustermetrics-manager-role
+  name: kueue-ks-manager-role
 rules:
 - apiGroups:
   - ""
@@ -145,14 +288,86 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - control.kubestellar.io
+  resources:
+  - bindingpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch   
+- apiGroups:
+  - kueue.x-k8s.io
+  resources:
+  - admissionchecks
+  - workloads
+  - clusterqueues
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch  
+- apiGroups:
+  - kueue.x-k8s.io
+  resources:
+  - admissionchecks/status
+  verbs:
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kueue.x-k8s.io
+  resources:
+  - workloads/status
+  verbs:
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch      
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - delete
+  - create
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kubeflow.org
+  resources:
+  - pytorchjobs
+  - pytorchjobs/status
+  verbs:
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch    
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: clustermetrics
-  name: clustermetrics-metrics-reader
+    app.kubernetes.io/name: kueue-ks
+  name: kueue-ks-metrics-reader
 rules:
 - nonResourceURLs:
   - /metrics
@@ -164,8 +379,8 @@ kind: ClusterRole
 metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: clustermetrics
-  name: clustermetrics-proxy-role
+    app.kubernetes.io/name: kueue-ks
+  name: kueue-ks-proxy-role
 rules:
 - apiGroups:
   - authentication.k8s.io
@@ -185,59 +400,59 @@ kind: RoleBinding
 metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: clustermetrics
-  name: clustermetrics-leader-election-rolebinding
-  namespace: clustermetrics-system
+    app.kubernetes.io/name: kueue-ks
+  name: kueue-ks-leader-election-rolebinding
+  namespace: kueue-ks-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: clustermetrics-leader-election-role
+  name: kueue-ks-leader-election-role
 subjects:
 - kind: ServiceAccount
-  name: clustermetrics-controller-manager
-  namespace: clustermetrics-system
+  name: kueue-ks-controller-manager
+  namespace: kueue-ks-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: clustermetrics
-  name: clustermetrics-manager-rolebinding
+    app.kubernetes.io/name: kueue-ks
+  name: kueue-ks-manager-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: clustermetrics-manager-role
+  name: kueue-ks-manager-role
 subjects:
 - kind: ServiceAccount
-  name: clustermetrics-controller-manager
-  namespace: clustermetrics-system
+  name: kueue-ks-controller-manager
+  namespace: kueue-ks-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: clustermetrics
-  name: clustermetrics-proxy-rolebinding
+    app.kubernetes.io/name: kueue-ks
+  name: kueue-ks-proxy-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: clustermetrics-proxy-role
+  name: kueue-ks-proxy-role
 subjects:
 - kind: ServiceAccount
-  name: clustermetrics-controller-manager
-  namespace: clustermetrics-system
+  name: kueue-ks-controller-manager
+  namespace: kueue-ks-system
 ---
 apiVersion: v1
 kind: Service
 metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: clustermetrics
+    app.kubernetes.io/name: kueue-ks
     control-plane: controller-manager
-  name: clustermetrics-controller-manager-metrics-service
-  namespace: clustermetrics-system
+  name: kueue-ks-controller-manager-metrics-service
+  namespace: kueue-ks-system
 spec:
   ports:
   - name: https
@@ -252,10 +467,10 @@ kind: Deployment
 metadata:
   labels:
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: clustermetrics
+    app.kubernetes.io/name: kueue-ks
     control-plane: controller-manager
-  name: clustermetrics-controller-manager
-  namespace: clustermetrics-system
+  name: kueue-ks-controller-manager
+  namespace: kueue-ks-system
 spec:
   replicas: 1
   selector:
@@ -296,8 +511,7 @@ spec:
         - --health-probe-bind-address=:8081
         - --metrics-bind-address=127.0.0.1:8080
         - --leader-elect
-        - --metrics-name={{.Values.clusterName}}
-        image: ko.local/cluster-metrics:102f815
+        image: ko.local/kueue-ks:102f815
         livenessProbe:
           httpGet:
             path: /healthz
@@ -325,5 +539,5 @@ spec:
             - ALL
       securityContext:
         runAsNonRoot: true
-      serviceAccountName: clustermetrics-controller-manager
+      serviceAccountName: kueue-ks-controller-manager
       terminationGracePeriodSeconds: 10

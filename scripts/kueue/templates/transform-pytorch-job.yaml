@@ -1,0 +1,9 @@
+apiVersion: control.kubestellar.io/v1alpha1
+kind: CustomTransform
+metadata:
+  name: pytorchjob-transform
+spec:
+  apiGroup: kubeflow.org
+  resource: pytorchjobs
+  remove:
+  - "$.spec.suspend"
