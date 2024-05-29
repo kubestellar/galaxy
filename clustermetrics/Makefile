@@ -184,6 +184,15 @@ kind-load-image:
 install-local-chart: chart kind-load-image
 	if [ ! -n "$(CONTEXT)" ] ; then helm  upgrade --install --create-namespace -n clustermetrics-system cluster-metrics ../charts/cluster-metrics ${HELM_OPTS} ; else helm  --kube-context ${CONTEXT} upgrade --install --create-namespace -n clustermetrics-system cluster-metrics ../charts/cluster-metrics ${HELM_OPTS} ; fi
 
+# this is used for local testing on k3d
+.PHONY: k3d-load-image
+k3d-load-image:
+	k3d image import ${IMG} -c ${CLUSTER}
+
+.PHONY: k3d-install-local-chart
+k3d-install-local-chart: chart k3d-load-image
+	if [ ! -n "$(CONTEXT)" ] ; then helm  upgrade --install --create-namespace -n clustermetrics-system cluster-metrics ../charts/cluster-metrics ${HELM_OPTS} ; else helm  --kube-context ${CONTEXT} upgrade --install --create-namespace -n clustermetrics-system cluster-metrics ../charts/cluster-metrics ${HELM_OPTS} ; fi
+
 ##@ Dependencies
 
 ## Location to install dependencies to

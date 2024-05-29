@@ -1,0 +1,6 @@
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: AdmissionCheck
+metadata:
+  name: kubestellar-admc
+spec:
+  controllerName: kubestellar.io/ks-kueue

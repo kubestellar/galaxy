@@ -1,0 +1,22 @@
+domain: galaxy.kubestellar.io
+layout:
+- go.kubebuilder.io/v3
+projectName: kueue-ks
+repo: kubestellar/galaxy/kueue-ks
+resources:
+- controller: true
+  domain: galaxy.kubestellar.io
+  group: kueue.x-k8s.io
+  kind: Workload
+  version: v1beta1
+- controller: true
+  domain: galaxy.kubestellar.io
+  group: galaxy.kubestellar.io
+  kind: ClusterMetrics
+  version: v1alpha1
+- controller: true
+  domain: galaxy.kubestellar.io
+  group: kueue.x-k8s.io
+  kind: AdmissionCheck
+  version: v1beta1
+version: "3"

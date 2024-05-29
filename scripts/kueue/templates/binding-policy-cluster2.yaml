@@ -1,0 +1,14 @@
+apiVersion: control.kubestellar.io/v1alpha1
+kind: BindingPolicy
+metadata:
+  name: cluster2
+spec:
+  clusterSelectors:
+  - matchLabels:
+      name: cluster2
+      location-group: edge
+  downsync:
+  - objectSelectors:
+    - matchLabels:
+        kubestellar.io/cluster: cluster2
+  wantSingletonReportedState: true
