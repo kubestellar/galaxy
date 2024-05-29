@@ -25,34 +25,35 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	//"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	v1beta1 "sigs.k8s.io/kueue/apis/kueue/v1beta1"
 )
 
-// ClusterMetricsReconciler reconciles a ClusterMetrics object
+const (
+	CPU    = "cpu"
+	Memory = "memory"
+)
+
+// ClusterMetricsReconciler reconciles ClusterMetrics object from each cluster and updates
+// global quota managed by kueue in a cluster queue. As new clusters join or new nodes
+// are added this controller increases quota accordingly. Quota decreasing is not so
+// straighforward. Although technically the decrease can be done, kueue will not preempt
+// any jobs even if it is required due to reduced quota. The only way the decrease can
+// work is to stop accepting new jobs, drain, decrease quota and open the gate for new
+// jobs.
 type ClusterMetricsReconciler struct {
 	client.Client
 	Scheme         *runtime.Scheme
 	WorkerClusters map[string]clustermetrics.ClusterMetrics
 	ClusterQueue   string
 }
+
 //+kubebuilder:rbac:groups=galaxy.kubestellar.io.galaxy.kubestellar.io,resources=clustermetrics,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=galaxy.kubestellar.io.galaxy.kubestellar.io,resources=clustermetrics/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=galaxy.kubestellar.io.galaxy.kubestellar.io,resources=clustermetrics/finalizers,verbs=update
 
-/*
-func NewClusterMetricsReconciler(c client.Client, s *runtime.Scheme, q string, cfg *rest.Config) *ClusterMetricsReconciler {
-	return &ClusterMetricsReconciler{
-		Client:        c,
-		Scheme:        s,
-		WorkerClusters: make(map[string]clustermetrics.ClusterMetrics),
-		ClusterQueue: q,
-	}
-}
-*/
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // TODO(user): Modify the Reconcile function to compare the state specified by
@@ -82,16 +83,15 @@ func (r *ClusterMetricsReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	available := map[string]*resource.Quantity{}
 	for _, cm := range r.WorkerClusters {
 		for _, node := range cm.Status.Nodes {
-			//log.Info("%%%%%%%%%% ", "Cluster", cm.Name)
-			if available["cpu"] == nil {
-				available["cpu"] = resource.NewQuantity(0, resource.BinarySI)
+			if available[CPU] == nil {
+				available[CPU] = resource.NewQuantity(0, resource.BinarySI)
 			}
-			available["cpu"].Add(*node.AllocatableResources.Cpu())
+			available[CPU].Add(*node.AllocatableResources.Cpu())
 
-			if available["memory"] == nil {
-				available["memory"] = resource.NewQuantity(0, resource.BinarySI)
+			if available[Memory] == nil {
+				available[Memory] = resource.NewQuantity(0, resource.BinarySI)
 			}
-			available["memory"].Add(*node.AllocatableResources.Memory())
+			available[Memory].Add(*node.AllocatableResources.Memory())
 		}
 	}
 	clusterQueue := v1beta1.ClusterQueue{}
@@ -104,38 +104,27 @@ func (r *ClusterMetricsReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 	Default := 0
 	update := false
-	//log.Info("Clusterqueue :::::::", "Resources", clusterQueue.Spec.ResourceGroups[0].Flavors[Default])
 	queueNominalCpuCount := clusterQueue.Spec.ResourceGroups[0].Flavors[Default].Resources[0].NominalQuota
-	if clusterQueue.Spec.ResourceGroups[0].Flavors[Default].Resources[0].Name == "cpu" {
-		//	log.Info("Clusterqueue nominal  ---- CPU")
-		if available["cpu"] != nil {
-			//	log.Info("Clusterqueue nominal cpus ----",
-			//		"", queueNominalCpuCount,
-			//		"", queueNominalCpuCount.Format)
-			if available["cpu"].Value() > queueNominalCpuCount.Value() {
+	if clusterQueue.Spec.ResourceGroups[0].Flavors[Default].Resources[0].Name == CPU {
+		if available[CPU] != nil {
+			if available[CPU].Value() > queueNominalCpuCount.Value() {
 				update = true
-				delta := available["cpu"].DeepCopy()
+				delta := available[CPU].DeepCopy()
 				delta.Sub(queueNominalCpuCount)
 				queueNominalCpuCount.Add(delta)
-				//		log.Info("ClusterQueue New CPU Quota ----", "", queueNominalCpuCount.Value())
 				clusterQueue.Spec.ResourceGroups[0].Flavors[Default].Resources[0].NominalQuota = queueNominalCpuCount
 			}
 		}
 	}
-	if clusterQueue.Spec.ResourceGroups[0].Flavors[Default].Resources[1].Name == "memory" {
-		//	log.Info("Clusterqueue nominal  ---- MEMORY")
+	if clusterQueue.Spec.ResourceGroups[0].Flavors[Default].Resources[1].Name == Memory {
 		queueNominalMemoryQuota := clusterQueue.Spec.ResourceGroups[0].Flavors[Default].Resources[1].NominalQuota //.ScaledValue(resource.Giga)
 
-		if available["memory"] != nil {
-			//		log.Info("Clusterqueue nominal memory ----",
-			//			"", queueNominalMemoryQuota,
-			//			"", queueNominalMemoryQuota.Format)
-			if available["memory"].ScaledValue(resource.Kilo) > queueNominalMemoryQuota.ScaledValue(resource.Kilo) {
+		if available[Memory] != nil {
+			if available[Memory].ScaledValue(resource.Kilo) > queueNominalMemoryQuota.ScaledValue(resource.Kilo) {
 				update = true
-				delta := available["memory"].DeepCopy()
+				delta := available[Memory].DeepCopy()
 				delta.Sub(queueNominalMemoryQuota)
 				queueNominalMemoryQuota.Add(delta)
-				//			log.Info("ClusterQueue New Memory Quota ----", "", queueNominalMemoryQuota)
 				clusterQueue.Spec.ResourceGroups[0].Flavors[Default].Resources[1].NominalQuota = queueNominalMemoryQuota
 			}
 		}
@@ -154,6 +143,6 @@ func (r *ClusterMetricsReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 // SetupWithManager sets up the controller with the Manager.
 func (r *ClusterMetricsReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-	    For(&clustermetrics.ClusterMetrics{}).
+		For(&clustermetrics.ClusterMetrics{}).
 		Complete(r)
 }

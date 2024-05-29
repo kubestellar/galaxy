@@ -81,13 +81,8 @@ func NewWorkloadReconciler(c client.Client, kueueClient *kueueClient.Clientset, 
 }
 
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the Workload object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
+// Reconciles kueue Workload object and if quota exists it downsyncs a job to a worker cluster.
+
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.12.1/pkg/reconcile
 func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -100,13 +95,11 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 	if !workload.HasQuotaReservation(wl) {
-		//1.2 workload has no reservation
 		log.Info("workload with no reservation, delete owned requests")
 		return reconcile.Result{}, r.evictJob(ctx, wl)
 	}
 
 	if apimeta.IsStatusConditionTrue(wl.Status.Conditions, kueue.WorkloadFinished) {
-		//1.2 workload has no reservation or is finished
 		log.Info("remote workload has completed")
 		return reconcile.Result{}, nil
 	}
@@ -130,15 +123,12 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 	// jobs with assigned cluster have already been scheduled to run
 	if _, exists := jobObject.GetLabels()[AssignedClusterLabel]; exists {
-		log.Info("............ Cluster Assignment Present")
-
 		if workload.HasAllChecksReady(wl) {
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				wl := &kueue.Workload{}
 				if err := r.Client.Get(ctx, req.NamespacedName, wl); err != nil {
 					log.Error(err, "Error when fetching Workload object ")
 					return err
-					//return reconcile.Result{}, client.IgnoreNotFound(err)
 				}
 				log.Info("............ All Checks Ready")
 				newCondition := metav1.Condition{
@@ -167,7 +157,6 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			log.Info("New BindingPolicy created for object", "Name", meta.Name)
 
 		} else {
-			log.Info("............ Not All Checks Ready")
 			relevantChecks, err := admissioncheck.FilterForController(ctx, r.Client, wl.Status.AdmissionChecks, ControllerName)
 			if err != nil {
 				return reconcile.Result{}, err

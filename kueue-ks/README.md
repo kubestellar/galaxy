@@ -1,44 +1,33 @@
-# kueue-ks
-// TODO(user): Add simple overview of use/purpose
+# Multi-cluster Job Workload Management with Kueue and KubeStellar
+This project aims to simplify the deployment and management of batch workloads across multiple Kubernetes clusters using [Kueue](https://kueue.sigs.k8s.io) for job queueing and [KubeStellar](https://docs.kubestellar.io) for multi-cluster configuration management. 
+
+
+## Overview
+This repository contains two core controllers:
+
+- *WorkloadController:* watches for Kueue `Workload` objects and orchestrates the downsync and deployment of corresponding jobs to worker clusters managed by KubeStellar
+- *QuotaManagerController:* monitors [ClusterMetrics](https://github.com/kubestellar/galaxy/tree/main/clustermetrics) from each worker cluster and dynamically updates Kueue's global resource quotas as needed
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+In multi-cluster Kubernetes environments, managing batch workloads and ensuring efficient resource utilization across clusters can be a complex challenge. Organizations often face issues such as resource contention, over-provisioning, and inefficient workload distribution, leading to suboptimal resource utilization and increased costs.
+
+The kueue-ks project goal is to address these challenges by leveraging Kueue's quota management capabilities and integrating with KubeStellar for multi-cluster configuration management. The primary goal is to enable centralized management and intelligent distribution of batch workloads across multiple clusters based on available resource quotas. 
+
 
 ## Getting Started
-You’ll need a Kubernetes cluster to run against. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
-**Note:** Your controller will automatically use the current context in your kubeconfig file (i.e. whatever cluster `kubectl cluster-info` shows).
+You’ll need a Kubernetes cluster to run against. You can use [K3D](https://k3d.io) to get a local cluster for testing.
 
-### Running on the cluster
-1. Install Instances of Custom Resources:
+### Running on the K3D cluster
+1. Check out this [instructions](./scripts/kueue/)
+
+2. Run job examples:
 
 ```sh
-kubectl apply -f config/samples/
+kubectl create -f examples/batch-job.yaml
 ```
 
-2. Build and push your image to the location specified by `IMG`:
-	
 ```sh
-make docker-build docker-push IMG=<some-registry>/kueue-ks:tag
-```
-	
-3. Deploy the controller to the cluster with the image specified by `IMG`:
-
-```sh
-make deploy IMG=<some-registry>/kueue-ks:tag
-```
-
-### Uninstall CRDs
-To delete the CRDs from the cluster:
-
-```sh
-make uninstall
-```
-
-### Undeploy controller
-UnDeploy the controller to the cluster:
-
-```sh
-make undeploy
+kubectl create -f examples/pytorch-simple-job.yaml
 ```
 
 ## Contributing
