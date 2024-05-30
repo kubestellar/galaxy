@@ -35,7 +35,7 @@ for image in "${images[@]}"; do
 done
 
 all_clusters=("${clusters[@]}")
-all_clusters+=("wds0")
+all_clusters+=("kind-kubeflex")
 for cluster in "${all_clusters[@]}"; do
   kubectl --context ${cluster} create namespace argo
   kubectl --context ${cluster} apply -n argo -f https://github.com/argoproj/argo-workflows/releases/download/v3.5.6/quick-start-minimal.yaml
@@ -49,15 +49,15 @@ done
 
 : install service and ingress for argo on wds0
 
-kubectl --context wds0 apply -f ${SCRIPT_DIR}/templates/ingress.yaml
+kubectl --context kind-kubeflex apply -f ${SCRIPT_DIR}/templates/ingress.yaml
 
 : install nodeport service on wds0 for minio
 
-kubectl --context wds0 apply -f ${SCRIPT_DIR}/templates/minio-service.yaml
+kubectl --context kind-kubeflex apply -f ${SCRIPT_DIR}/templates/minio-service.yaml
 
 : update configmap for wecs to use a common s3 from kubeflex-control-plane
 
-nodePort=$(kubectl --context wds0 -n argo get service minio-nodeport -o jsonpath='{.spec.ports[0].nodePort}')
+nodePort=$(kubectl --context kind-kubeflex -n argo get service minio-nodeport -o jsonpath='{.spec.ports[0].nodePort}')
 for cluster in "${clusters[@]}"; do
   kubectl --context ${cluster} -n argo get cm artifact-repositories -o yaml > /tmp/artifact-repositories.yaml
   sed -i.bak "s/minio:9000/kubeflex-control-plane:${nodePort}/g" /tmp/artifact-repositories.yaml
@@ -72,25 +72,25 @@ done
 
 : create custom transform for argo workflows
 
-kubectl --context wds0 apply -f  ${SCRIPT_DIR}/templates/workflow-ct.yaml
+kubectl --context kind-kubeflex apply -f  ${SCRIPT_DIR}/templates/workflow-ct.yaml
 
 : create binding policies for argo workflows
 
 for cluster in "${clusters[@]}"; do
-  kubectl --context wds0 apply -f ${SCRIPT_DIR}/samples/wf-binding-policy-${cluster}.yaml
+  kubectl --context kind-kubeflex apply -f ${SCRIPT_DIR}/samples/wf-binding-policy-${cluster}.yaml
 done
 
 # install webhook only if flag --webhook is present 
 if [[ "${install_webhook}" == "--webhook" ]]; then
-  : install mutating admission webhook for workflows on wds0
+  : install mutating admission webhook for workflows on kind-kubeflex
 
   cd ${SCRIPT_DIR}/../../suspend-webhook
-  kubectl config use-context wds0
+  kubectl config use-context kind-kubeflex
   make webhook-local-build && make install-webhook-local-chart
 
   : wait for admission webhook to be up
 
-  wait-for-cmd '(($(wrap-cmd kubectl --context wds0 get deployments -n ksi-system -o jsonpath='{.status.readyReplicas}' suspend-webhook 2>/dev/null || echo 0) >= 1))'
+  wait-for-cmd '(($(wrap-cmd kubectl --context kind-kubeflex get deployments -n ksi-system -o jsonpath='{.status.readyReplicas}' suspend-webhook 2>/dev/null || echo 0) >= 1))'
 fi  
 
 echo "you can access the argo console at https://argo.localtest.me:9443"

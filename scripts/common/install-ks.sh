@@ -64,7 +64,7 @@ kflex create its1 -t host -p ocm
 
 : wait for OCM cluster manager up
 
-wait-for-cmd '(($(wrap-cmd kubectl --context its1 get deployments.apps -n open-cluster-management -o jsonpath='{.status.readyReplicas}' cluster-manager 2>/dev/null || echo 0) >= 1))'
+wait-for-cmd '(($(wrap-cmd kubectl --context kind-kubeflex get deployments.apps -n open-cluster-management -o jsonpath='{.status.readyReplicas}' cluster-manager 2>/dev/null || echo 0) >= 1))'
 
 : create clusters and register
 
@@ -72,34 +72,34 @@ flags="--force-internal-endpoint-lookup"
 for cluster in "${clusters[@]}"; do
     kind create cluster --name ${cluster}
     kubectl config rename-context kind-${cluster} ${cluster}
-    clusteradm --context its1 get token | grep '^clusteradm join' | sed "s/<cluster_name>/${cluster}/" | awk '{print $0 " --context '${cluster}' --singleton '${flags}'"}' | sh
+    clusteradm --context kind-kubeflex get token | grep '^clusteradm join' | sed "s/<cluster_name>/${cluster}/" | awk '{print $0 " --context '${cluster}' --singleton '${flags}'"}' | sh
 done
 
 : Wait for csrs in its1
-wait-for-cmd '(($(kubectl --context its1 get csr 2>/dev/null | grep -c Pending) >= 2))'
+wait-for-cmd '(($(kubectl --context kind-kubeflex get csr 2>/dev/null | grep -c Pending) >= 2))'
 
 : accept csr
 
-clusteradm --context its1 accept --clusters cluster1
-clusteradm --context its1 accept --clusters cluster2
+clusteradm --context kind-kubeflex accept --clusters cluster1
+clusteradm --context kind-kubeflex accept --clusters cluster2
 
 : label clusters
 
-kubectl --context its1 get managedclusters
+kubectl --context kind-kubeflex get managedclusters
 for cluster in "${clusters[@]}"; do
-    kubectl --context its1 label managedcluster ${cluster} location-group=edge name=${cluster}
+    kubectl --context kind-kubeflex label managedcluster ${cluster} location-group=edge name=${cluster}
 done
 
-: create wds0 of type host
+: create kind-kubeflex of type host
 
 kubectl config use-context kind-kubeflex
 kflex create wds0 -t host -p kubestellar --set itsName=its1
 
-wait-for-cmd '(($(wrap-cmd kubectl --context wds0 get deployments.apps -n wds0-system -o jsonpath='{.status.readyReplicas}' kubestellar-controller-manager 2>/dev/null || echo 0) >= 1))'
+wait-for-cmd '(($(wrap-cmd kubectl --context kind-kubeflex get deployments.apps -n wds0-system -o jsonpath='{.status.readyReplicas}' kubestellar-controller-manager 2>/dev/null || echo 0) >= 1))'
 
 : kubestellar-controller-manager is running
 
-wait-for-cmd '(($(wrap-cmd kubectl --context wds0 get deployments.apps -n wds0-system -o jsonpath='{.status.readyReplicas}' transport-controller 2>/dev/null || echo 0) >= 1))'
+wait-for-cmd '(($(wrap-cmd kubectl --context kind-kubeflex get deployments.apps -n wds0-system -o jsonpath='{.status.readyReplicas}' transport-controller 2>/dev/null || echo 0) >= 1))'
 
 : transport controller is running
 

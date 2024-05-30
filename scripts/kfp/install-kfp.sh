@@ -87,7 +87,7 @@ done
 
 : install kfp on kubeflex and add services and ingresses
 
-contexts=(wds0);
+contexts=(kind-kubeflex);
 for context in "${contexts[@]}"; do
   kubectl --context ${context} apply -k "github.com/kubeflow/pipelines/manifests/kustomize/cluster-scoped-resources?ref=$PIPELINE_VERSION"
   kubectl --context ${context} wait --for condition=established --timeout=60s crd/applications.app.k8s.io
@@ -102,7 +102,7 @@ done
 
 : prepare minio secret for WECs
 
-kubectl --context wds0 -n kubeflow get secret mlpipeline-minio-artifact -o yaml > ${WORK_DIR}/mlpipeline-minio-artifact.yaml
+kubectl --context kind-kubeflex -n kubeflow get secret mlpipeline-minio-artifact -o yaml > ${WORK_DIR}/mlpipeline-minio-artifact.yaml
 sed -i.bak -e '/creationTimestamp:/d' \
            -e '/resourceVersion:/d' \
            -e '/uid:/d' \
@@ -112,8 +112,8 @@ sed -i.bak -e '/creationTimestamp:/d' \
 
 : install kfp with kustomization on execution clusters
 
-minioNPort=$(kubectl --context wds0 -n kubeflow get service minio-nodeport -o jsonpath='{.spec.ports[0].nodePort}')
-mysqlNPort=$(kubectl --context wds0 -n kubeflow get service mysql-nodeport -o jsonpath='{.spec.ports[0].nodePort}')
+minioNPort=$(kubectl --context kind-kubeflex -n kubeflow get service minio-nodeport -o jsonpath='{.spec.ports[0].nodePort}')
+mysqlNPort=$(kubectl --context kind-kubeflex -n kubeflow get service mysql-nodeport -o jsonpath='{.spec.ports[0].nodePort}')
 echo "minioNPort=${minioNPort} mysqlNPort=${mysqlNPort}"
 sed "s/NODE_PORT/${minioNPort}/g" ${SCRIPT_DIR}/templates/minio-proxy-template.yaml > ${WORK_DIR}/minio-proxy.yaml
 
@@ -152,37 +152,37 @@ done
 : cleanup dynamic patch
 rm ${SCRIPT_DIR}/kustomize/base/patch-pipeline-install-config.yaml
 
-: install mutating admission webhook for workflows on wds0
+: install mutating admission webhook for workflows on kind-kubeflex
 
 cd ${SCRIPT_DIR}/../../suspend-webhook
-kubectl config use-context wds0
+kubectl config use-context kind-kubeflex
 make webhook-local-build && make install-webhook-local-chart
 
 : wait for admission webhook to be up
 
-wait-for-cmd '(($(wrap-cmd kubectl --context wds0 get deployments -n ksi-system -o jsonpath='{.status.readyReplicas}' suspend-webhook 2>/dev/null || echo 0) >= 1))'
+wait-for-cmd '(($(wrap-cmd kubectl --context kind-kubeflex get deployments -n ksi-system -o jsonpath='{.status.readyReplicas}' suspend-webhook 2>/dev/null || echo 0) >= 1))'
 
 : install shadow pods controller
 
 cd ${SCRIPT_DIR}/../../shadow-pods
-kubectl config use-context wds0
+kubectl config use-context kind-kubeflex
 make loki-logger-local-build && make shadow-local-build && make install-shadow-local-chart
 
 : create binding policies for argo workflows
 
 for cluster in "${clusters[@]}"; do
-  kubectl --context wds0 apply -f  ${SCRIPT_DIR}/templates/wf-binding-policy-${cluster}.yaml
+  kubectl --context kind-kubeflex apply -f  ${SCRIPT_DIR}/templates/wf-binding-policy-${cluster}.yaml
 done
 
 : create custom transform for argo workflows
 
-kubectl --context wds0 apply -f  ${SCRIPT_DIR}/templates/workflow-ct.yaml
+kubectl --context kind-kubeflex apply -f  ${SCRIPT_DIR}/templates/workflow-ct.yaml
 
 : wait until all KFP deployments for kubeflow are up in all clusters, this may take tens of minutes
 
 set +x
 contexts=("${clusters[@]}")
-contexts+=("wds0")
+contexts+=("kind-kubeflex")
 for context in "${contexts[@]}"; do
   while true; do
       if [[ $(check_pods_ready ${context}) == true ]]; then

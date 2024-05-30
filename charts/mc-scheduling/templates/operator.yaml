@@ -228,7 +228,7 @@ spec:
         - --health-probe-bind-address=:8081
         - --metrics-bind-address=127.0.0.1:8080
         - --leader-elect
-        image: ko.local/mc-scheduler:439831d
+        image: ko.local/mc-scheduler:102f815
         livenessProbe:
           httpGet:
             path: /healthz
