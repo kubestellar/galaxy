@@ -58,7 +58,7 @@ done
 
 clusters+=("kind-kubeflex")
 for cluster in "${clusters[@]}"; do
-    kubectl --context ${cluster} apply -f ${SCRIPT_DIR}/templates/cluster-metrics-${cluster}.yaml
+    kubectl --context kind-kubeflex apply -f ${SCRIPT_DIR}/templates/cluster-metrics-${cluster}.yaml
 done
 
 : install mc-scheduler on core cluster
