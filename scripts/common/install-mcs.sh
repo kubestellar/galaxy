@@ -42,11 +42,11 @@ cd ${SCRIPT_DIR}/../../clustermetrics
 make ko-local-build
 
 contexts=("${clusters[@]}")
-contexts+=("wds0")
+contexts+=("kind-kubeflex")
 for context in "${contexts[@]}"; do
     clusterName=${context}
     cluster=${context}
-    if [[ ${context} == "wds0" ]]; then
+    if [[ ${context} == "kind-kubeflex" ]]; then
       clusterName="local"
       cluster="kubeflex"
     fi
@@ -56,14 +56,14 @@ done
 
 : deploy cluster-metrics objects for each cluster
 
-clusters+=("wds0")
+clusters+=("kind-kubeflex")
 for cluster in "${clusters[@]}"; do
-    kubectl --context wds0 apply -f ${SCRIPT_DIR}/templates/cluster-metrics-${cluster}.yaml
+    kubectl --context ${cluster} apply -f ${SCRIPT_DIR}/templates/cluster-metrics-${cluster}.yaml
 done
 
 : install mc-scheduler on core cluster
 
 cd ${SCRIPT_DIR}/../../mc-scheduling
-kubectl config use-context wds0
+kubectl config use-context kind-kubeflex
 make ko-local-build
 CLUSTER=kubeflex make install-local-chart

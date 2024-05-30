@@ -28,7 +28,7 @@ source "${SCRIPT_DIR}/config.sh"
 helm repo add grafana https://grafana.github.io/helm-charts
 helm repo update
 
-helm --kube-context wds0 upgrade --install loki grafana/loki-stack \
+helm --kube-context kind-kubeflex upgrade --install loki grafana/loki-stack \
   --create-namespace \
   --namespace loki \
   --set promtail.enabled=false \
@@ -39,11 +39,11 @@ helm --kube-context wds0 upgrade --install loki grafana/loki-stack \
 
 : create nodeport for loki service
 
-kubectl --context wds0 apply -f ${SCRIPT_DIR}/templates/loki-nodeport-service.yaml
+kubectl --context kind-kubeflex apply -f ${SCRIPT_DIR}/templates/loki-nodeport-service.yaml
 
 : get nodeport value
 
-lokiNPort=$(kubectl --context wds0 -n loki get service loki-nodeport -o jsonpath='{.spec.ports[0].nodePort}')
+lokiNPort=$(kubectl --context kind-kubeflex -n loki get service loki-nodeport -o jsonpath='{.spec.ports[0].nodePort}')
 
 : install promtail on WECs
 
