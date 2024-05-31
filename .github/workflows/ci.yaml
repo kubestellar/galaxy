@@ -1,0 +1,24 @@
+name: CI
+on:
+  pull_request:
+    branches:
+      - main
+      - "release-*"
+
+jobs:
+  ci-checks:
+    runs-on: ubuntu-latest
+    name: CI Checks
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.19'
+      - name: Lint
+        run: find . -type f -name 'go.mod' -execdir go fmt ./... \;
+      - name: Static analysis
+        run: find . -type f -name 'go.mod' -execdir go vet ./... \;
+      - name: Build
+        run: find . -type f -name 'go.mod' -execdir go build -v  ./... \;
+      - name: Test
+        run: find . -type f -name 'go.mod' -execdir go test -v  ./... \;

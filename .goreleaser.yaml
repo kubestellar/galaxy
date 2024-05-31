@@ -1,0 +1,188 @@
+builds:
+- id: "cluster-metrics"
+  main: ./clustermetrics/cmd/cluster-metrics
+  binary: bin/cluster-metrics
+  ldflags:
+  - "{{ .Env.LDFLAGS }}"
+  goos:
+  - linux
+  goarch:
+  - amd64
+  - arm64
+  ignore:
+  - goos: darwin
+    goarch: ppc64le
+  env:
+  - CGO_ENABLED=0
+- id: "kueue-ks"
+  main: ./kueue-ks/cmd/kueue-ks
+  binary: bin/kueue-ks
+  ldflags:
+  - "{{ .Env.LDFLAGS }}"
+  goos:
+  - linux
+  goarch:
+  - amd64
+  - arm64
+  ignore:
+  - goos: darwin
+    goarch: ppc64le
+  env:
+  - CGO_ENABLED=0
+- id: "mc-scheduling"
+  main: ./mc-scheduling/cmd/mc-scheduler
+  binary: bin/mc-scheduler
+  ldflags:
+  - "{{ .Env.LDFLAGS }}"
+  goos:
+  - linux
+  goarch:
+  - amd64
+  - arm64
+  ignore:
+  - goos: darwin
+    goarch: ppc64le
+  env:
+  - CGO_ENABLED=0
+- id: "shadow-pods"
+  main: ./shadow-pods/cmd/shadow-pods
+  binary: bin/shadow-pods
+  ldflags:
+  - "{{ .Env.LDFLAGS }}"
+  goos:
+  - linux
+  goarch:
+  - amd64
+  - arm64
+  ignore:
+  - goos: darwin
+    goarch: ppc64le
+  env:
+  - CGO_ENABLED=0
+- id: "loki-logger"
+  main: ./shadow-pods/cmd/loki-logger
+  binary: bin/loki-logger
+  ldflags:
+  - "{{ .Env.LDFLAGS }}"
+  goos:
+  - linux
+  goarch:
+  - amd64
+  - arm64
+  ignore:
+  - goos: darwin
+    goarch: ppc64le
+  env:
+  - CGO_ENABLED=0
+- id: "suspend-webhook"
+  main: ./suspend-webhook/cmd/suspend-webhook
+  binary: bin/suspend-webhook
+  ldflags:
+  - "{{ .Env.LDFLAGS }}"
+  goos:
+  - linux
+  goarch:
+  - amd64
+  - arm64
+  ignore:
+  - goos: darwin
+    goarch: ppc64le
+  env:
+  - CGO_ENABLED=0   
+kos:           
+  - repository: ghcr.io/kubestellar/galaxy/cluster-metrics
+    main: ./clustermetrics/cmd/cluster-metrics
+    build: cluster-metrics
+    tags:
+    - '{{.Version}}'
+    - latest
+    bare: true
+    preserve_import_paths: false
+    ldflags:
+    - "{{ .Env.LDFLAGS }}"
+    platforms:
+    - linux/amd64
+    - linux/arm64
+    env:
+    - CGO_ENABLED=0
+  - repository: ghcr.io/kubestellar/galaxy/kueue-ks
+    main: ./kueue-ks/cmd/kueue-ks
+    build: kueue-ks
+    tags:
+    - '{{.Version}}'
+    - latest
+    bare: true
+    preserve_import_paths: false
+    ldflags:
+    - "{{ .Env.LDFLAGS }}"
+    platforms:
+    - linux/amd64
+    - linux/arm64
+    env:
+    - CGO_ENABLED=0
+  - repository: ghcr.io/kubestellar/galaxy/mc-scheduler
+    main: ./mc-scheduling/cmd/mc-scheduler
+    build: mc-scheduling
+    tags:
+    - '{{.Version}}'
+    - latest
+    bare: true
+    preserve_import_paths: false
+    ldflags:
+    - "{{ .Env.LDFLAGS }}"
+    platforms:
+    - linux/amd64
+    - linux/arm64
+    env:
+    - CGO_ENABLED=0
+  - repository: ghcr.io/kubestellar/galaxy/shadow-pods
+    main: ./shadow-pods/cmd/shadow-pods
+    build: shadow-pods
+    tags:
+    - '{{.Version}}'
+    - latest
+    bare: true
+    preserve_import_paths: false
+    ldflags:
+    - "{{ .Env.LDFLAGS }}"
+    platforms:
+    - linux/amd64
+    - linux/arm64
+    env:
+    - CGO_ENABLED=0
+  - repository: ghcr.io/kubestellar/galaxy/loki-logger
+    main: ./shadow-pods/cmd/loki-logger
+    build: loki-logger
+    tags:
+    - '{{.Version}}'
+    - latest
+    bare: true
+    preserve_import_paths: false
+    ldflags:
+    - "{{ .Env.LDFLAGS }}"
+    platforms:
+    - linux/amd64
+    - linux/arm64
+    env:
+    - CGO_ENABLED=0
+  - repository: ghcr.io/kubestellar/galaxy/suspend-webhook
+    main: ./suspend-webhook/cmd/suspend-webhook
+    build: suspend-webhook
+    tags:
+    - '{{.Version}}'
+    - latest
+    bare: true
+    preserve_import_paths: false
+    ldflags:
+    - "{{ .Env.LDFLAGS }}"
+    platforms:
+    - linux/amd64
+    - linux/arm64
+    env:
+    - CGO_ENABLED=0     
+release:
+  draft: false
+  prerelease: auto
+  mode: keep-existing
+
+
