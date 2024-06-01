@@ -97,7 +97,7 @@ builds:
   - CGO_ENABLED=0   
 kos:           
   - repository: ghcr.io/kubestellar/galaxy/cluster-metrics
-    working_dir: cluster-metrics
+    working_dir: clustermetrics
     main: ./cmd/cluster-metrics
     id: cluster-metrics
     build: cluster-metrics
