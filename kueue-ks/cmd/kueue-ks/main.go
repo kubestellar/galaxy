@@ -30,12 +30,12 @@ import (
 
 	"kubestellar/galaxy/kueue-ks/controllers"
 
-	metricsv1alpha1 "kubestellar/galaxy/clustermetrics/api/v1alpha1"
-	scheduler "kubestellar/galaxy/mc-scheduling/pkg/scheduler"
 	ksv1alpha1 "github.com/kubestellar/kubestellar/api/control/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	metricsv1alpha1 "kubestellar/galaxy/clustermetrics/api/v1alpha1"
+	scheduler "kubestellar/galaxy/mc-scheduling/pkg/scheduler"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -43,7 +43,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	kueue "sigs.k8s.io/kueue/apis/kueue/v1beta1"
 	kueueClient "sigs.k8s.io/kueue/client-go/clientset/versioned"
-	
 	//+kubebuilder:scaffold:imports
 )
 
@@ -155,7 +154,7 @@ func main() {
 		KueueClient:   kClient,
 		DynamicClient: dynamic.NewForConfigOrDie(ctrl.GetConfigOrDie()),
 		RestMapper:    rm,
-		Scheduler: scheduler.NewDefaultScheduler(),
+		Scheduler:     scheduler.NewDefaultScheduler(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Workload")
 		os.Exit(1)
@@ -164,8 +163,7 @@ func main() {
 		Client:         mgr.GetClient(),
 		Scheme:         mgr.GetScheme(),
 		WorkerClusters: make(map[string]metricsv1alpha1.ClusterMetrics),
-		ClusterQueue: clusterQueue,
-
+		ClusterQueue:   clusterQueue,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterMetrics")
 		os.Exit(1)

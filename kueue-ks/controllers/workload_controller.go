@@ -64,11 +64,9 @@ const (
 	AssignedClusterLabel    = "mcc.kubestellar.io/cluster"
 )
 
-
 //+kubebuilder:rbac:groups=kueue.x-k8s.io.galaxy.kubestellar.io,resources=workloads,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=kueue.x-k8s.io.galaxy.kubestellar.io,resources=workloads/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=kueue.x-k8s.io.galaxy.kubestellar.io,resources=workloads/finalizers,verbs=update
-
 
 func NewWorkloadReconciler(c client.Client, kueueClient *kueueClient.Clientset, cfg *rest.Config, rm meta.RESTMapper) *WorkloadReconciler {
 	return &WorkloadReconciler{
@@ -79,7 +77,6 @@ func NewWorkloadReconciler(c client.Client, kueueClient *kueueClient.Clientset, 
 		Scheduler:     scheduler.NewDefaultScheduler(),
 	}
 }
-
 
 // Reconciles kueue Workload object and if quota exists it downsyncs a job to a worker cluster.
 
@@ -221,7 +218,6 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	return ctrl.Result{RequeueAfter: time.Duration(1 * float64(time.Second))}, nil
 
-
 }
 
 func (r *WorkloadReconciler) RemoteFinishedCondition(wl kueue.Workload) *metav1.Condition {
@@ -302,7 +298,7 @@ func (r *WorkloadReconciler) getJobObject(ctx context.Context, meta metav1.Objec
 		log.Error(err, "Error when RESTMapping object ")
 		return nil, nil, err
 	}
-	
+
 	return jobObject.DeepCopy(), mapping, nil
 }
 func (*WorkloadReconciler) GetWorkloadKey(o runtime.Object) (types.NamespacedName, error) {
@@ -376,9 +372,10 @@ func (r *WorkloadReconciler) createBindingPolicy(ctx context.Context, meta metav
 func bindingPolicyName(meta metav1.Object) string {
 	return meta.GetName() + "-" + meta.GetNamespace()
 }
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *WorkloadReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-	    For(&kueue.Workload{}).
+		For(&kueue.Workload{}).
 		Complete(r)
 }

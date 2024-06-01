@@ -18,7 +18,7 @@ CLUSTER ?= kubeflex
 KO_DOCKER_REPO ?= ko.local
 IMAGE_TAG ?= $(shell git rev-parse --short HEAD)
 # webhook image
-WEBHOOK_CMD_NAME ?= webhook
+WEBHOOK_CMD_NAME ?= suspend-webhook
 WEBHOOK_IMG ?= ${KO_DOCKER_REPO}/${WEBHOOK_CMD_NAME}:${IMAGE_TAG}
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.29.0

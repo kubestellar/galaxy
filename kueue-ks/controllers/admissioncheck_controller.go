@@ -57,7 +57,6 @@ const (
 //+kubebuilder:rbac:groups=kueue.x-k8s.io.galaxy.kubestellar.io,resources=admissionchecks/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=kueue.x-k8s.io.galaxy.kubestellar.io,resources=admissionchecks/finalizers,verbs=update
 
-
 //Reconciles kueue AdmissionCheck
 
 // For more details, check Reconcile and its Result here:
@@ -120,6 +119,6 @@ func cmpConditionState(a, b *metav1.Condition) bool {
 // SetupWithManager sets up the controller with the Manager.
 func (r *AdmissionCheckReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-	    For(&kueue.AdmissionCheck{}).
+		For(&kueue.AdmissionCheck{}).
 		Complete(r)
 }
