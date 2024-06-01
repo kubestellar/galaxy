@@ -92,6 +92,7 @@ builds:
 kos:           
   - repository: ghcr.io/kubestellar/galaxy/cluster-metrics
     main: ./clustermetrics/cmd/cluster-metrics
+    id: cluster-metrics
     build: cluster-metrics
     tags:
     - '{{.Version}}'
@@ -107,6 +108,7 @@ kos:
     - CGO_ENABLED=0
   - repository: ghcr.io/kubestellar/galaxy/kueue-ks
     main: ./kueue-ks/cmd/kueue-ks
+    id: kueue-ks
     build: kueue-ks
     tags:
     - '{{.Version}}'
@@ -122,6 +124,7 @@ kos:
     - CGO_ENABLED=0
   - repository: ghcr.io/kubestellar/galaxy/mc-scheduler
     main: ./mc-scheduling/cmd/mc-scheduler
+    id: mc-scheduling
     build: mc-scheduling
     tags:
     - '{{.Version}}'
@@ -137,6 +140,7 @@ kos:
     - CGO_ENABLED=0
   - repository: ghcr.io/kubestellar/galaxy/shadow-pods
     main: ./shadow-pods/cmd/shadow-pods
+    id: shadow-pods
     build: shadow-pods
     tags:
     - '{{.Version}}'
@@ -152,6 +156,7 @@ kos:
     - CGO_ENABLED=0
   - repository: ghcr.io/kubestellar/galaxy/loki-logger
     main: ./shadow-pods/cmd/loki-logger
+    id: loki-logger
     build: loki-logger
     tags:
     - '{{.Version}}'
@@ -167,6 +172,7 @@ kos:
     - CGO_ENABLED=0
   - repository: ghcr.io/kubestellar/galaxy/suspend-webhook
     main: ./suspend-webhook/cmd/suspend-webhook
+    id: suspend-webhook
     build: suspend-webhook
     tags:
     - '{{.Version}}'
