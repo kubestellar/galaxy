@@ -1,6 +1,7 @@
 builds:
 - id: "cluster-metrics"
-  main: ./clustermetrics/cmd/cluster-metrics
+  dir: clustermetrics
+  main: ./cmd/cluster-metrics
   binary: bin/cluster-metrics
   ldflags:
   - "{{ .Env.LDFLAGS }}"
@@ -15,7 +16,8 @@ builds:
   env:
   - CGO_ENABLED=0
 - id: "kueue-ks"
-  main: ./kueue-ks/cmd/kueue-ks
+  dir: kueue-ks
+  main: ./cmd/kueue-ks
   binary: bin/kueue-ks
   ldflags:
   - "{{ .Env.LDFLAGS }}"
@@ -30,7 +32,8 @@ builds:
   env:
   - CGO_ENABLED=0
 - id: "mc-scheduling"
-  main: ./mc-scheduling/cmd/mc-scheduler
+  dir: mc-scheduling
+  main: ./cmd/mc-scheduler
   binary: bin/mc-scheduler
   ldflags:
   - "{{ .Env.LDFLAGS }}"
@@ -45,7 +48,8 @@ builds:
   env:
   - CGO_ENABLED=0
 - id: "shadow-pods"
-  main: ./shadow-pods/cmd/shadow-pods
+  dir: shadow-pods
+  main: ./cmd/shadow-pods
   binary: bin/shadow-pods
   ldflags:
   - "{{ .Env.LDFLAGS }}"
@@ -60,7 +64,8 @@ builds:
   env:
   - CGO_ENABLED=0
 - id: "loki-logger"
-  main: ./shadow-pods/cmd/loki-logger
+  dir: shadow-pods
+  main: ./cmd/loki-logger
   binary: bin/loki-logger
   ldflags:
   - "{{ .Env.LDFLAGS }}"
@@ -75,7 +80,8 @@ builds:
   env:
   - CGO_ENABLED=0
 - id: "suspend-webhook"
-  main: ./suspend-webhook/cmd/suspend-webhook
+  dir: suspend-webhook
+  main: ./cmd/suspend-webhook
   binary: bin/suspend-webhook
   ldflags:
   - "{{ .Env.LDFLAGS }}"
@@ -91,7 +97,8 @@ builds:
   - CGO_ENABLED=0   
 kos:           
   - repository: ghcr.io/kubestellar/galaxy/cluster-metrics
-    main: ./clustermetrics/cmd/cluster-metrics
+    working_dir: cluster-metrics
+    main: ./cmd/cluster-metrics
     id: cluster-metrics
     build: cluster-metrics
     tags:
@@ -107,7 +114,8 @@ kos:
     env:
     - CGO_ENABLED=0
   - repository: ghcr.io/kubestellar/galaxy/kueue-ks
-    main: ./kueue-ks/cmd/kueue-ks
+    working_dir: kueue-ks
+    main: ./cmd/kueue-ks
     id: kueue-ks
     build: kueue-ks
     tags:
@@ -123,7 +131,8 @@ kos:
     env:
     - CGO_ENABLED=0
   - repository: ghcr.io/kubestellar/galaxy/mc-scheduler
-    main: ./mc-scheduling/cmd/mc-scheduler
+    working_dir: mc-scheduling
+    main: ./cmd/mc-scheduler
     id: mc-scheduling
     build: mc-scheduling
     tags:
@@ -139,7 +148,8 @@ kos:
     env:
     - CGO_ENABLED=0
   - repository: ghcr.io/kubestellar/galaxy/shadow-pods
-    main: ./shadow-pods/cmd/shadow-pods
+    working_dir: shadow-pods
+    main: ./cmd/shadow-pods
     id: shadow-pods
     build: shadow-pods
     tags:
@@ -155,7 +165,8 @@ kos:
     env:
     - CGO_ENABLED=0
   - repository: ghcr.io/kubestellar/galaxy/loki-logger
-    main: ./shadow-pods/cmd/loki-logger
+    working_dir: shadow-pods
+    main: ./cmd/loki-logger
     id: loki-logger
     build: loki-logger
     tags:
@@ -171,7 +182,8 @@ kos:
     env:
     - CGO_ENABLED=0
   - repository: ghcr.io/kubestellar/galaxy/suspend-webhook
-    main: ./suspend-webhook/cmd/suspend-webhook
+    working_dir: suspend-webhook
+    main: ./cmd/suspend-webhook
     id: suspend-webhook
     build: suspend-webhook
     tags:
