@@ -1,5 +1,5 @@
 apiVersion: v2
-name: mc-scheduling
+name: mc-scheduling-chart
 description: A Helm chart the multicluster scheduling controller
 
 # A chart can be either an 'application' or a 'library' chart.

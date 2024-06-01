@@ -1,5 +1,5 @@
 apiVersion: v2
-name: shadow-pods
+name: shadow-pods-chart
 description: A Helm chart for creating shadow pods for a argo workflow
 
 # A chart can be either an 'application' or a 'library' chart.
