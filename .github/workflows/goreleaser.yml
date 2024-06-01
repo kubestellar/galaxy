@@ -61,14 +61,14 @@ jobs:
         chartVersion=$(echo ${{ github.ref_name }} | cut -c 2-)
         cd clustermetrics && make chart IMG=${{ env.REGISTRY }}/${{ env.REPO }}/cluster-metrics:${{github.ref_name}} && cd -
         helm package ${{ env.CHARTS_PATH }}/cluster-metrics --destination . --version ${chartVersion} --app-version ${chartVersion}
-        helm push ./cluster-metrics-${chartVersion}.tgz oci://${{ env.REGISTRY }}/${{ env.REPO }}  
+        helm push ./cluster-metrics-chart-${chartVersion}.tgz oci://${{ env.REGISTRY }}/${{ env.REPO }}  
 
     - name: Package and push mc-scheduling chart
       run: |
         chartVersion=$(echo ${{ github.ref_name }} | cut -c 2-)
         cd mc-scheduling && make chart IMG=${{ env.REGISTRY }}/${{ env.REPO }}/mc-scheduler:${{github.ref_name}} && cd -
         helm package ${{ env.CHARTS_PATH }}/mc-scheduling --destination . --version ${chartVersion} --app-version ${chartVersion}
-        helm push ./mc-scheduling-${chartVersion}.tgz oci://${{ env.REGISTRY }}/${{ env.REPO }}  
+        helm push ./mc-scheduling-chart-${chartVersion}.tgz oci://${{ env.REGISTRY }}/${{ env.REPO }}  
     
     - name: Package and push shadow-pods chart
       run: |
@@ -78,7 +78,7 @@ jobs:
         -e "s|loki_logger_image_placeholder|${{ env.REGISTRY }}/${{ env.REPO }}/loki-logger|g" \
         ${{ env.CHARTS_PATH }}/shadow-pods/values.yaml
         helm package ${{ env.CHARTS_PATH }}/shadow-pods --destination . --version ${chartVersion} --app-version ${chartVersion}
-        helm push ./shadow-pods-${chartVersion}.tgz oci://${{ env.REGISTRY }}/${{ env.REPO }}  
+        helm push ./shadow-pods-chart-${chartVersion}.tgz oci://${{ env.REGISTRY }}/${{ env.REPO }}  
     
        
     - name: Package and push suspend-webhook chart
@@ -88,4 +88,4 @@ jobs:
         -e "s|tag_placeholder|${{github.ref_name}}|g" \
         ${{ env.CHARTS_PATH }}/suspend-webhook/values.yaml
         helm package ${{ env.CHARTS_PATH }}/suspend-webhook --destination . --version ${chartVersion} --app-version ${chartVersion}
-        helm push ./suspend-webhook-${chartVersion}.tgz oci://${{ env.REGISTRY }}/${{ env.REPO }}      
+        helm push ./suspend-webhook-chart-${chartVersion}.tgz oci://${{ env.REGISTRY }}/${{ env.REPO }}      
