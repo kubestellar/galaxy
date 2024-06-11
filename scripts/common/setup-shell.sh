@@ -54,3 +54,47 @@ function wrap-cmd() {
 }
 
 export -f wrap-cmd
+
+
+function wait-for-deployment() {
+
+if [ "$#" -ne 3 ]; then
+  echo "Usage: $0 <context> <namespace> <deployment-name>"
+  exit 1
+fi    
+
+CONTEXT=$1
+NAMESPACE=$2
+DEPLOYMENT_NAME=$3
+SLEEP_SECONDS=3 # How long to sleep between checks
+
+while :; do
+    # Check if the deployment exists
+    if kubectl --context ${CONTEXT} get deployment "$DEPLOYMENT_NAME" -n "$NAMESPACE" > /dev/null 2>&1; then
+        echo "Checking deployment $DEPLOYMENT_NAME..."
+
+        # Retrieve the number of ready replicas and desired replicas for the deployment
+        READY_REPLICAS=$(kubectl  --context ${CONTEXT} get deployment "$DEPLOYMENT_NAME" -n "$NAMESPACE" -o jsonpath='{.status.readyReplicas}')
+        REPLICAS=$(kubectl  --context ${CONTEXT} get deployment "$DEPLOYMENT_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.replicas}')
+
+        # Check if READY_REPLICAS is unset or empty, setting to zero if it is
+        [ -z "$READY_REPLICAS" ] && READY_REPLICAS=0
+
+        # Compare the number of ready replicas with the desired number of replicas
+        if [ "$READY_REPLICAS" -eq "$REPLICAS" ]; then
+            echo "All replicas are ready."
+            break
+        else
+            echo "Ready replicas ($READY_REPLICAS) do not match the desired count of replicas ($REPLICAS)."
+        fi
+    else
+        echo "Deployment $DEPLOYMENT_NAME does not exist in the namespace $NAMESPACE and context $CONTEXT"
+    fi
+    
+    # Sleep before checking again
+    echo "Sleeping for $SLEEP_SECONDS seconds..."
+    sleep "$SLEEP_SECONDS"
+done
+}
+
+export -f wait-for-deployment
