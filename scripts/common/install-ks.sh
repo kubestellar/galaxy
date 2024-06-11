@@ -90,7 +90,7 @@ for cluster in "${clusters[@]}"; do
     kubectl --context kind-kubeflex label managedcluster ${cluster} location-group=edge name=${cluster}
 done
 
-: create kind-kubeflex of type host
+: create wds of type host
 
 kubectl config use-context kind-kubeflex
 kflex create wds0 -t host -p kubestellar --set itsName=its1
