@@ -30,7 +30,7 @@ spec:
               - --set
               - "ControlPlaneName={{.ControlPlaneName}}"
               - --set
-              - APIGroups="galaxy.kubestellar.io\,argoproj.io"
+              - APIGroups=galaxy.kubestellar.io\,argoproj.io
             env:
             - name: XDG_CACHE_HOME
               value: /tmp/helm/.cache
