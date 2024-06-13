@@ -40,7 +40,7 @@ webhooks:
   - name: {{ $n3 }}
     clientConfig:
       service:
-        name: {{ include "suspend-webhook.fullname" . }}
+        name: suspend-webhook
         namespace: {{ .Release.Namespace }}
         path: "/mutate-workflows"
       caBundle: {{ b64enc $ca.Cert }}
