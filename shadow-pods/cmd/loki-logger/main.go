@@ -27,14 +27,17 @@ import (
 	"sort"
 	"strconv"
 	"time"
+	"crypto/tls"
 )
 
 const (
-	defaultTimeInterval     = "10s"
-	defaultInitialTimeRange = "24h"
-	limit                   = "4000"
-	defaultContainer        = "main"
-	defaultLokiBaseURL      = "http://loki.loki:3100"
+	defaultTimeInterval         = "10s"
+	defaultInitialTimeRange     = "24h"
+	limit                       = "4000"
+	defaultContainer            = "main"
+	defaultDevLokiBaseURL       = "http://loki.loki:3100"
+	defaultOpenshiftLokiBaseURL = "https://logging-loki-querier-http.openshift-logging.svc.cluster.local:3100"
+	defaultLogType              = "application"
 )
 
 type LogData struct {
@@ -64,24 +67,59 @@ type Stream struct {
 }
 
 type Query struct {
-	URL       string
-	Namespace string
-	Pod       string
-	NodeName  string
-	Container string
-	Limit     string
+	URL             string
+	Namespace       string
+	Pod             string
+	NodeName        string
+	Container       string
+	Limit           string
+	LokiInstallType string
+	LogType         string
+	TlsCertFile     string
+	TlsKeyFile      string
 }
 
 func (q *Query) Run(start string) (string, error) {
 	params := url.Values{}
 	params.Set("start", start)
-	params.Set("query", fmt.Sprintf(`{pod="%s",namespace="%s",container="%s",node_name="%s"}`,
+
+	if q.LokiInstallType == "openshift" {
+		params.Set("query", fmt.Sprintf(`{kubernetes_pod_name="%s", kubernetes_namespace_name="%s", log_type="%s"} | json | hostname="%s" | kubernetes_container_name="%s"`,
+                q.Pod, q.Namespace, q.LogType, q.NodeName, q.Container))
+	} else {
+		params.Set("query", fmt.Sprintf(`{pod="%s",namespace="%s",container="%s",node_name="%s"}`,
 		q.Pod, q.Namespace, q.Container, q.NodeName))
+	}
 	params.Set("limit", limit)
 
 	queryUrl := fmt.Sprintf("%s/loki/api/v1/query_range?%s", q.URL, params.Encode())
 
-	resp, err := http.Get(queryUrl)
+	req, err := http.NewRequest(http.MethodGet, queryUrl, nil)
+        if err != nil {
+                 return "", fmt.Errorf("client: could not create request: %v", err)
+        }
+	client := &http.Client{}
+
+	if q.LokiInstallType == "openshift" { 
+	        req.Header.Set("X-Scope-OrgID", q.LogType)
+		clientTLSCert, err := tls.LoadX509KeyPair(q.TlsCertFile, q.TlsKeyFile)
+        	if err != nil {
+                	return "", fmt.Errorf("Error loading certificate and key file: %v", err)
+        	}
+
+        	tlsConfig := &tls.Config{
+                	InsecureSkipVerify: true,
+                	Certificates: []tls.Certificate{clientTLSCert},
+        	}
+
+        	tr := &http.Transport{
+                	TLSClientConfig: tlsConfig,
+        	}
+
+        	client = &http.Client{Transport: tr}
+	}
+
+        resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("error querying Loki: %w", err)
 	}
@@ -100,6 +138,32 @@ func (q *Query) Run(start string) (string, error) {
 }
 
 func main() {
+	loki_install_type := os.Getenv("LOKI_INSTALL_TYPE")
+	if loki_install_type == "" {
+		log.Fatal("LOKI_INSTALL_TYPE env variable is not set.")
+	} else if loki_install_type != "openshift" && loki_install_type != "dev" {
+		log.Fatal("LOKI_INSTALL_TYPE has to be either `openshift` or `dev`.")
+	}
+
+	// When LOKI_INSTALL_TYPE is "openshift", LOG_TYPE should be one of these three: application, infrastructure or audit
+	// When LOKI_INSTALL_TYPE is "openshift", it is compulsory to specify TLS_CERT_FILE and TLS_KEY_FILE
+	// You can get the TLS_CERT_FILE and TLS_KEY_FILE from the secret "logging-loki-querier-http" in the "openshift-logging" namespace on the openshift cluster where the loki instance has been installed
+	log_type := os.Getenv("LOG_TYPE")
+	tls_cert_file := os.Getenv("TLS_CERT_FILE")
+	tls_key_file := os.Getenv("TLS_KEY_FILE")
+	if loki_install_type == "openshift" {
+		if log_type == "" {
+			log.Printf("LOG_TYPE not defined, using default: %s", defaultLogType)
+			log_type = defaultLogType
+		}
+		if tls_cert_file == "" {
+			log.Fatal("TLS_CERT_FILE env variable is not set.")
+		}
+		if tls_key_file == "" {
+                        log.Fatal("TLS_KEY_FILE env variable is not set.")
+                }
+	}
+
 	namespace := os.Getenv("POD_NAMESPACE")
 	if namespace == "" {
 		log.Fatal("POD_NAMESPACE env variable is not set.")
@@ -123,8 +187,13 @@ func main() {
 
 	lokiBaseURL := os.Getenv("LOKI_BASE_URL")
 	if lokiBaseURL == "" {
-		log.Printf("LOKI_BASE_URL not defined, using default: %s", defaultLokiBaseURL)
-		lokiBaseURL = defaultLokiBaseURL
+		if loki_install_type == "openshift" {
+			log.Printf("LOKI_BASE_URL not defined, using default: %s", defaultOpenshiftLokiBaseURL)
+			lokiBaseURL = defaultOpenshiftLokiBaseURL
+		} else {
+			log.Printf("LOKI_BASE_URL not defined, using default: %s", defaultDevLokiBaseURL)
+                        lokiBaseURL = defaultDevLokiBaseURL
+		}
 	} else {
 		log.Printf("LOKI_BASE_URL: %s", lokiBaseURL)
 	}
@@ -170,6 +239,10 @@ func main() {
 		Pod:       pod,
 		Container: container,
 		Limit:     limit,
+		LokiInstallType: loki_install_type,
+		LogType: log_type,
+		TlsCertFile: tls_cert_file,
+		TlsKeyFile: tls_key_file,
 	}
 
 	initialStartTime := fmt.Sprintf("%d", time.Now().Add(-initialTimeInterval).UnixNano())
