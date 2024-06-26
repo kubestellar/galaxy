@@ -145,8 +145,8 @@ func main() {
 		log.Fatal("LOKI_INSTALL_TYPE has to be either `openshift` or `dev`.")
 	}
 
-	// When LOKI_INSTALL_TYPE is "opensift", LOG_TYPE should be one of these three: application, infrastructure or audit
-	// When LOKI_INSTALL_TYPE is "opensift", it is compulsory to specify TLS_CERT_FILE and TLS_KEY_FILE
+	// When LOKI_INSTALL_TYPE is "openshift", LOG_TYPE should be one of these three: application, infrastructure or audit
+	// When LOKI_INSTALL_TYPE is "openshift", it is compulsory to specify TLS_CERT_FILE and TLS_KEY_FILE
 	// You can get the TLS_CERT_FILE and TLS_KEY_FILE from the secret "logging-loki-querier-http" in the "openshift-logging" namespace on the openshift cluster where the loki instance has been installed
 	log_type := os.Getenv("LOG_TYPE")
 	tls_cert_file := os.Getenv("TLS_CERT_FILE")
