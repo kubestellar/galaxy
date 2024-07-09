@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -26,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -35,15 +37,21 @@ import (
 )
 
 const (
-	schedulingLabelKey = "kubestellar.io/cluster"
-	hostingClusterName = "local"
+	schedulingLabelKey       = "kubestellar.io/cluster"
+	hostingClusterName       = "local"
+	LokiInstallTypeOpenShift = "openshift"
+	LokiInstallTypeDev       = "dev"
+	certsVolume              = "certs"
+	certsMountPath           = "/certs"
 )
 
 // WorkflowReconciler reconciles a Workflow object
 type WorkflowReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	PodImage string
+	Scheme          *runtime.Scheme
+	PodImage        string
+	LokiInstallType string
+	CertsSecretName string
 }
 
 // PodInfo is used to hold the relevant info for each pod in the workflow status
@@ -110,7 +118,7 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 
 		if !isWorkflowCompletedOrError(workflow.Status.Phase) {
-			pod := generatePodTemplate(podInfo, r.PodImage)
+			pod := generatePodTemplate(podInfo, r.PodImage, r.LokiInstallType, r.CertsSecretName)
 			if err := controllerutil.SetControllerReference(workflow, pod, r.Scheme); err != nil {
 				return ctrl.Result{}, err
 			}
@@ -176,8 +184,8 @@ func splitString(input string) (firstPart string, lastPart string) {
 	return firstPart, lastPart
 }
 
-func generatePodTemplate(podInfo PodInfo, image string) *corev1.Pod {
-	return &corev1.Pod{
+func generatePodTemplate(podInfo PodInfo, image, lokiInstallType, CertsSecretName string) *corev1.Pod {
+	podTemplate := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podInfo.Name,
 			Namespace: podInfo.Namespace,
@@ -206,6 +214,49 @@ func generatePodTemplate(podInfo PodInfo, image string) *corev1.Pod {
 			},
 		},
 	}
+	if lokiInstallType == LokiInstallTypeOpenShift {
+		podTemplate.Spec.Volumes = []corev1.Volume{
+			{
+				Name: certsVolume,
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: CertsSecretName,
+					},
+				},
+			},
+		}
+		podTemplate.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{
+			{
+				Name:      certsVolume,
+				ReadOnly:  true,
+				MountPath: certsMountPath,
+			},
+		}
+		extraEnv := []corev1.EnvVar{
+			{
+				Name:  "LOKI_INSTALL_TYPE",
+				Value: LokiInstallTypeOpenShift,
+			},
+			{
+				Name:  "TLS_CERT_FILE",
+				Value: filepath.Join(certsMountPath, "tls.crt"),
+			},
+			{
+				Name:  "TLS_KEY_FILE",
+				Value: filepath.Join(certsMountPath, "tls.key"),
+			},
+		}
+		podTemplate.Spec.Containers[0].Env = append(podTemplate.Spec.Containers[0].Env, extraEnv...)
+
+		podTemplate.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{
+			AllowPrivilegeEscalation: ptr.To(false),
+			RunAsNonRoot:             ptr.To(true),
+			SeccompProfile: &corev1.SeccompProfile{
+				Type: corev1.SeccompProfileTypeRuntimeDefault,
+			},
+		}
+	}
+	return podTemplate
 }
 
 func checkPodExists(kClient client.Client, ctx context.Context, podInfo PodInfo) (bool, error) {

@@ -58,6 +58,8 @@ func main() {
 	var secureMetrics bool
 	var enableHTTP2 bool
 	var shadowPodImage string
+	var lokiInstallType string
+	var certsSecretName string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -68,6 +70,9 @@ func main() {
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.StringVar(&shadowPodImage, "shadow-pod-image", "", "The image to use for the shadow pod.")
+	flag.StringVar(&lokiInstallType, "loki-install-type", "dev", "The loki install type - openshift or dev")
+	flag.StringVar(&certsSecretName, "certs-secret", "logging-loki-querier-http",
+		"The name of the secret with the certs to connect to loki, used only for openshit install type")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -125,9 +130,11 @@ func main() {
 	}
 
 	if err = (&controller.WorkflowReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		PodImage: shadowPodImage,
+		Client:          mgr.GetClient(),
+		Scheme:          mgr.GetScheme(),
+		PodImage:        shadowPodImage,
+		LokiInstallType: lokiInstallType,
+		CertsSecretName: certsSecretName,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Workflow")
 		os.Exit(1)
