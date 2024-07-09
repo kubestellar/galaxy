@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,7 +28,8 @@ import (
 	"sort"
 	"strconv"
 	"time"
-	"crypto/tls"
+
+	ctr "kubestellar/galaxy/shadow-pods/internal/controller"
 )
 
 const (
@@ -79,47 +81,52 @@ type Query struct {
 	TlsKeyFile      string
 }
 
+// LogEntry represents the structure of JSON data in the OpenShift case.
+type LogEntry struct {
+	Message string `json:"message"`
+}
+
 func (q *Query) Run(start string) (string, error) {
 	params := url.Values{}
 	params.Set("start", start)
 
-	if q.LokiInstallType == "openshift" {
+	if q.LokiInstallType == ctr.LokiInstallTypeOpenShift {
 		params.Set("query", fmt.Sprintf(`{kubernetes_pod_name="%s", kubernetes_namespace_name="%s", log_type="%s"} | json | hostname="%s" | kubernetes_container_name="%s"`,
-                q.Pod, q.Namespace, q.LogType, q.NodeName, q.Container))
+			q.Pod, q.Namespace, q.LogType, q.NodeName, q.Container))
 	} else {
 		params.Set("query", fmt.Sprintf(`{pod="%s",namespace="%s",container="%s",node_name="%s"}`,
-		q.Pod, q.Namespace, q.Container, q.NodeName))
+			q.Pod, q.Namespace, q.Container, q.NodeName))
 	}
 	params.Set("limit", limit)
 
 	queryUrl := fmt.Sprintf("%s/loki/api/v1/query_range?%s", q.URL, params.Encode())
 
 	req, err := http.NewRequest(http.MethodGet, queryUrl, nil)
-        if err != nil {
-                 return "", fmt.Errorf("client: could not create request: %v", err)
-        }
+	if err != nil {
+		return "", fmt.Errorf("client: could not create request: %v", err)
+	}
 	client := &http.Client{}
 
-	if q.LokiInstallType == "openshift" { 
-	        req.Header.Set("X-Scope-OrgID", q.LogType)
+	if q.LokiInstallType == ctr.LokiInstallTypeOpenShift {
+		req.Header.Set("X-Scope-OrgID", q.LogType)
 		clientTLSCert, err := tls.LoadX509KeyPair(q.TlsCertFile, q.TlsKeyFile)
-        	if err != nil {
-                	return "", fmt.Errorf("Error loading certificate and key file: %v", err)
-        	}
+		if err != nil {
+			return "", fmt.Errorf("error loading certificate and key file: %v", err)
+		}
 
-        	tlsConfig := &tls.Config{
-                	InsecureSkipVerify: true,
-                	Certificates: []tls.Certificate{clientTLSCert},
-        	}
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: true,
+			Certificates:       []tls.Certificate{clientTLSCert},
+		}
 
-        	tr := &http.Transport{
-                	TLSClientConfig: tlsConfig,
-        	}
+		tr := &http.Transport{
+			TLSClientConfig: tlsConfig,
+		}
 
-        	client = &http.Client{Transport: tr}
+		client = &http.Client{Transport: tr}
 	}
 
-        resp, err := client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("error querying Loki: %w", err)
 	}
@@ -141,7 +148,7 @@ func main() {
 	loki_install_type := os.Getenv("LOKI_INSTALL_TYPE")
 	if loki_install_type == "" {
 		log.Fatal("LOKI_INSTALL_TYPE env variable is not set.")
-	} else if loki_install_type != "openshift" && loki_install_type != "dev" {
+	} else if loki_install_type != ctr.LokiInstallTypeOpenShift && loki_install_type != ctr.LokiInstallTypeDev {
 		log.Fatal("LOKI_INSTALL_TYPE has to be either `openshift` or `dev`.")
 	}
 
@@ -151,7 +158,7 @@ func main() {
 	log_type := os.Getenv("LOG_TYPE")
 	tls_cert_file := os.Getenv("TLS_CERT_FILE")
 	tls_key_file := os.Getenv("TLS_KEY_FILE")
-	if loki_install_type == "openshift" {
+	if loki_install_type == ctr.LokiInstallTypeOpenShift {
 		if log_type == "" {
 			log.Printf("LOG_TYPE not defined, using default: %s", defaultLogType)
 			log_type = defaultLogType
@@ -160,8 +167,8 @@ func main() {
 			log.Fatal("TLS_CERT_FILE env variable is not set.")
 		}
 		if tls_key_file == "" {
-                        log.Fatal("TLS_KEY_FILE env variable is not set.")
-                }
+			log.Fatal("TLS_KEY_FILE env variable is not set.")
+		}
 	}
 
 	namespace := os.Getenv("POD_NAMESPACE")
@@ -187,12 +194,12 @@ func main() {
 
 	lokiBaseURL := os.Getenv("LOKI_BASE_URL")
 	if lokiBaseURL == "" {
-		if loki_install_type == "openshift" {
+		if loki_install_type == ctr.LokiInstallTypeOpenShift {
 			log.Printf("LOKI_BASE_URL not defined, using default: %s", defaultOpenshiftLokiBaseURL)
 			lokiBaseURL = defaultOpenshiftLokiBaseURL
 		} else {
 			log.Printf("LOKI_BASE_URL not defined, using default: %s", defaultDevLokiBaseURL)
-                        lokiBaseURL = defaultDevLokiBaseURL
+			lokiBaseURL = defaultDevLokiBaseURL
 		}
 	} else {
 		log.Printf("LOKI_BASE_URL: %s", lokiBaseURL)
@@ -233,16 +240,16 @@ func main() {
 	}
 
 	query := Query{
-		URL:       lokiBaseURL,
-		Namespace: namespace,
-		NodeName:  hostName,
-		Pod:       pod,
-		Container: container,
-		Limit:     limit,
+		URL:             lokiBaseURL,
+		Namespace:       namespace,
+		NodeName:        hostName,
+		Pod:             pod,
+		Container:       container,
+		Limit:           limit,
 		LokiInstallType: loki_install_type,
-		LogType: log_type,
-		TlsCertFile: tls_cert_file,
-		TlsKeyFile: tls_key_file,
+		LogType:         log_type,
+		TlsCertFile:     tls_cert_file,
+		TlsKeyFile:      tls_key_file,
 	}
 
 	initialStartTime := fmt.Sprintf("%d", time.Now().Add(-initialTimeInterval).UnixNano())
@@ -283,7 +290,14 @@ func main() {
 
 		// Print the sorted slice
 		for _, value := range values {
-			fmt.Printf("%s\n", value[1])
+			logMessage := value[1]
+			if loki_install_type == ctr.LokiInstallTypeOpenShift {
+				logMessage, err = extractMessage(value[1])
+				if err != nil {
+					log.Fatalf("Failed to extract message: %v", err)
+				}
+			}
+			fmt.Printf("%s\n", logMessage)
 		}
 
 		time.Sleep(timeInterval)
@@ -308,4 +322,16 @@ func incrememtTimestampString(tsMs string, increment int64) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%d", ts+increment), nil
+}
+
+func extractMessage(jsonStr string) (string, error) {
+	var entry LogEntry
+
+	// Unmarshal the JSON string into the LogEntry struct
+	err := json.Unmarshal([]byte(jsonStr), &entry)
+	if err != nil {
+		return "", err
+	}
+
+	return entry.Message, nil
 }

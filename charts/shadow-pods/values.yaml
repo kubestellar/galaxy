@@ -16,6 +16,12 @@ lokiLoggerImage:
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
 
+# lokiInstallType: dev (for upstream kube install) or openshift (with loki operator)
+lokiInstallType: "dev"
+
+# name of secret with certificates for connecting to loki using TLS (it can be copied from the "openshift-logging" namespace)
+certsSecretName: "logging-loki-querier-http"  
+
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
