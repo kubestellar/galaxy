@@ -62,7 +62,7 @@ type PodInfo struct {
 	Phase     v1alpha1.NodePhase
 }
 
-//+kubebuilder:rbac:groups=argoproj.io,resources=workflows,verbs=get;list;watch;update;patch
+//+kubebuilder:rbac:groups=argoproj.io,resources=workflows;workflows/finalizers,verbs=get;list;watch;update;patch
 //+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
