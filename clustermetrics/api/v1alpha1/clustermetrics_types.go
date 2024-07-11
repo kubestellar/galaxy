@@ -36,6 +36,9 @@ type NodeInfo struct {
 	AllocatableResources      corev1.ResourceList `json:"allocatableResources,omitempty"`
 	AllocatedResourceRequests corev1.ResourceList `json:"allocatedResourceRequests,omitempty"`
 	AllocatedResourceLimits   corev1.ResourceList `json:"allocatedResourceLimits,omitempty"`
+	Taints                    []corev1.Taint      `json:"taints,omitempty"`
+	Labels                    map[string]string   `json:"labels,omitempty"`
+	Unschedulable             bool                `json:"unschedulable,omitempty"`
 }
 
 //+kubebuilder:object:root=true

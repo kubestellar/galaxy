@@ -125,6 +125,9 @@ func (r *ClusterMetricsReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		for resourceName, totalQuantity := range totalResourceLimits {
 			nodeInfo.AllocatedResourceLimits[resourceName] = totalQuantity
 		}
+		nodeInfo.Labels = node.Labels
+		nodeInfo.Taints = node.Spec.Taints
+		nodeInfo.Unschedulable = node.Spec.Unschedulable
 		cMetrics.Status.Nodes = append(cMetrics.Status.Nodes, nodeInfo)
 	}
 
