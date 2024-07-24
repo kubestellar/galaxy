@@ -21,8 +21,6 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 source "${SCRIPT_DIR}/../common/setup-shell.sh"
 source "${SCRIPT_DIR}/../common/config.sh"
 
-export PIPELINE_VERSION=2.2.0
-
 HOSTING_CLUSTER_NODE=kubeflex-control-plane
 WORK_DIR=$(mktemp -d -p /tmp)
 echo "using ${WORK_DIR} to clone repos"
@@ -154,44 +152,50 @@ rm ${SCRIPT_DIR}/kustomize/base/patch-pipeline-install-config.yaml
 
 : install mutating admission webhook for workflows on kind-kubeflex
 
-cd ${SCRIPT_DIR}/../../suspend-webhook
-kubectl config use-context kind-kubeflex
-make webhook-local-build && make install-webhook-local-chart
+helm --kube-context ${core} upgrade --install suspend-webhook \
+    oci://ghcr.io/kubestellar/galaxy/suspend-webhook-chart \
+    --version ${SUSPEND_WEBHOOK_VERSION} \
+    --create-namespace --namespace ksi-system \
+    --set image.repository=ghcr.io/kubestellar/galaxy/suspend-webhook \
+    --set image.tag=${SUSPEND_WEBHOOK_VERSION}
 
 : wait for admission webhook to be up
 
-wait-for-cmd '(($(wrap-cmd kubectl --context kind-kubeflex get deployments -n ksi-system -o jsonpath='{.status.readyReplicas}' suspend-webhook 2>/dev/null || echo 0) >= 1))'
+wait-for-deployment ${core} ksi-system suspend-webhook-suspend-webhook-chart
 
 : install shadow pods controller
 
-cd ${SCRIPT_DIR}/../../shadow-pods
-kubectl config use-context kind-kubeflex
-make loki-logger-local-build && make shadow-local-build && make install-shadow-local-chart
+helm --kube-context ${core} upgrade --install shadow-pods \
+    oci://ghcr.io/kubestellar/galaxy/shadow-pods-chart \
+    --version ${SHADOW_PODS_VERSION} \
+    --create-namespace --namespace ksi-system \
+    --set image.repository=ghcr.io/kubestellar/galaxy/shadow-pods \
+    --set image.tag=${SHADOW_PODS_VERSION} \
+    --set lokiLoggerImage.repository=ghcr.io/kubestellar/galaxy/loki-logger \
+    --set lokiLoggerImage.tag=${SHADOW_PODS_VERSION} \
+    --set lokiInstallType=dev
+
+: iwait for shadow pods controller to be up and running
+
+wait-for-deployment ${core} ksi-system shadow-pods-shadow-pods-chart 
 
 : create binding policies for argo workflows
 
 for cluster in "${clusters[@]}"; do
-  kubectl --context kind-kubeflex apply -f  ${SCRIPT_DIR}/templates/wf-binding-policy-${cluster}.yaml
+  kubectl --context  ${core}  apply -f  ${SCRIPT_DIR}/templates/wf-binding-policy-${cluster}.yaml
 done
 
 : create custom transform for argo workflows
 
-kubectl --context kind-kubeflex apply -f  ${SCRIPT_DIR}/templates/workflow-ct.yaml
+kubectl --context  ${core} apply -f  ${SCRIPT_DIR}/templates/workflow-ct.yaml
 
 : wait until all KFP deployments for kubeflow are up in all clusters, this may take tens of minutes
 
 set +x
 contexts=("${clusters[@]}")
-contexts+=("kind-kubeflex")
+contexts+=("${core}")
 for context in "${contexts[@]}"; do
-  while true; do
-      if [[ $(check_pods_ready ${context}) == true ]]; then
-          echo "All deployments for ${context} are in ready state."
-          break
-      else
-          echo "Not all deployments in ${context} are ready yet. Waiting..."
-          sleep 5
-      fi
-  done
+   echo "checking all pods ready in context ${context} kubeflow. Please wait...." 
+   wait-for-all-deployments-in-namespace ${context} kubeflow
 done
 set -x

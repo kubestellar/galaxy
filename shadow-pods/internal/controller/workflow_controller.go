@@ -255,6 +255,13 @@ func generatePodTemplate(podInfo PodInfo, image, lokiInstallType, CertsSecretNam
 				Type: corev1.SeccompProfileTypeRuntimeDefault,
 			},
 		}
+	} else {
+		extraEnv := []corev1.EnvVar{{
+			Name:  "LOKI_INSTALL_TYPE",
+			Value: LokiInstallTypeDev,
+		},
+		}
+		podTemplate.Spec.Containers[0].Env = append(podTemplate.Spec.Containers[0].Env, extraEnv...)
 	}
 	return podTemplate
 }

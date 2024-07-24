@@ -98,3 +98,65 @@ done
 }
 
 export -f wait-for-deployment
+
+wait-for-apiresource() {
+    local context="$1"
+    local api_group="$2"
+    local resource_name="$3"
+    local interval_seconds=3
+
+    echo "Polling for Kubernetes resource '$resource_name' in API group '$api_group' every $interval_seconds seconds."
+
+    while true; do
+        # Get the list of all resources within the specified API group and check if the specified resource name is present
+        if kubectl --context ${core} api-resources --api-group="$api_group" | awk '{print $1}' | tail -n +2 | grep -q "^$resource_name$"; then
+            echo "Kubernetes resource '$resource_name' in API group '$api_group' has been found."
+            return 0
+        else
+            echo "Kubernetes resource '$resource_name' in API group '$api_group' not found yet. Retrying in $interval_seconds seconds..."
+            sleep "$interval_seconds"
+        fi
+    done
+}
+
+export -f wait-for-apiresource
+
+# waits until all the deployments for a given context and namespace are ready
+wait-for-all-deployments-in-namespace() {
+    context=$1
+    namespace=$2
+
+    local allReady=true
+    deployments=$(kubectl --context ${context} get deployments -n ${namespace} -o jsonpath='{.items[*].metadata.name}')
+    for deployment in $deployments; do
+        readyReplicas=$(kubectl --context ${context} get deployment $deployment -n ${namespace} -o jsonpath='{.status.readyReplicas}')
+        if [[ "$readyReplicas" -lt 1 ]]; then
+            allReady=false
+            break
+        fi
+    done
+    echo $allReady
+}
+
+export -f wait-for-all-deployments-in-namespace
+
+# copies a secret from a source namespace namespace to a target namespace
+copy-secret() {
+    # Check for correct number of arguments
+    if [ "$#" -ne 4 ]; then
+        echo "Usage: $0 <context> <source-namespace> <secret-name> <target-namespace>"
+        exit 1
+    fi
+
+    context=$1
+    SOURCE_NAMESPACE=$2
+    SECRET_NAME=$3
+    TARGET_NAMESPACE=$4
+
+    kubectl get secret $SECRET_NAME --namespace $SOURCE_NAMESPACE -o yaml | \
+    sed -e 's/namespace: .*//g' \
+    -e '/^  ownerReferences:/,/^  creationTimestamp:/d' | \
+    kubectl apply --namespace=$TARGET_NAMESPACE -f -
+}
+
+export -f copy-secret
