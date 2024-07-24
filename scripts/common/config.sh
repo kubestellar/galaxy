@@ -18,3 +18,13 @@
 
 # wec used in the setup
 clusters=(cluster1 cluster2);
+core=kind-kubeflex
+
+# charts versions
+CLUSTER_METRICS_CHART_VERSION=0.0.1-alpha.6
+MC_SCHEDULING_CHART_VERSION=0.0.1-alpha.6
+SHADOW_PODS_VERSION=0.0.1-alpha.6
+SUSPEND_WEBHOOK_VERSION=0.0.1-alpha.6
+
+# Kubeflow Pipeline Version
+PIPELINE_VERSION=2.2.0

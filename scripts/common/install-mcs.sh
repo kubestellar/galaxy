@@ -38,20 +38,20 @@ trap cleanup EXIT
 
 : install cluster-metrics controller on all clusters
 
-cd ${SCRIPT_DIR}/../../clustermetrics
-make ko-local-build
-
 contexts=("${clusters[@]}")
-contexts+=("kind-kubeflex")
+contexts+=("${core}")
 for context in "${contexts[@]}"; do
     clusterName=${context}
-    cluster=${context}
-    if [[ ${context} == "kind-kubeflex" ]]; then
+    if [[ ${context} == ${core} ]]; then
       clusterName="local"
-      cluster="kubeflex"
-    fi
-    CONTEXT=${context} CLUSTER=${cluster} HELM_OPTS="--set clusterName=${clusterName}" make install-local-chart 
-    kubectl --context ${context} apply -f ${SCRIPT_DIR}/templates/cluster-metrics-rbac.yaml
+    else 
+      kubectl --context ${context} apply -f ${SCRIPT_DIR}/templates/cluster-metrics-rbac.yaml
+    fi 
+    helm --kube-context ${context} upgrade --install cluster-metrics \
+    oci://ghcr.io/kubestellar/galaxy/cluster-metrics-chart \
+    --version ${CLUSTER_METRICS_CHART_VERSION} \
+    --create-namespace --namespace clustermetrics-system \
+    --set clusterName=${clusterName}
 done
 
 : deploy cluster-metrics objects for each cluster
@@ -63,7 +63,7 @@ done
 
 : install mc-scheduler on core cluster
 
-cd ${SCRIPT_DIR}/../../mc-scheduling
-kubectl config use-context kind-kubeflex
-make ko-local-build
-CLUSTER=kubeflex make install-local-chart
+helm --kube-context ${core} upgrade --install mc-scheduling \
+    oci://ghcr.io/kubestellar/galaxy/mc-scheduling-chart \
+    --version ${MC_SCHEDULING_CHART_VERSION} \
+    --create-namespace --namespace mc-scheduling-system
