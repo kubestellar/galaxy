@@ -47,6 +47,13 @@ rules:
   verbs:
   - create
   - patch
+- apiGroups:
+  - tenancy.kflex.kubestellar.org
+  resources:
+  - controlplanes
+  verbs:
+  - get
+  - list
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -85,13 +92,14 @@ rules:
   - list
   - patch
   - update
-  - watch 
+  - watch
 - apiGroups:
   - kueue.x-k8s.io
   resources:
   - admissionchecks
   - workloads
   - clusterqueues
+  - resourceflavors
   verbs:
   - create
   - delete
@@ -110,7 +118,7 @@ rules:
   - list
   - patch
   - update
-  - watch    
+  - watch
 - apiGroups:
   - kueue.x-k8s.io
   resources:
@@ -121,7 +129,7 @@ rules:
   - list
   - patch
   - update
-  - watch            
+  - watch
 - apiGroups:
   - batch
   resources:
@@ -145,7 +153,36 @@ rules:
   - list
   - patch
   - update
-  - watch            
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+- apiGroups:
+  - tenancy.kflex.kubestellar.org
+  resources:
+  - controlplanes
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - control.kubestellar.io
+  resources:
+  - combinedstatuses
+  - combinedstatuses/results
+  verbs:
+  - get
+  - list
+  - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -180,13 +217,14 @@ rules:
   - list
   - patch
   - update
-  - watch 
+  - watch
 - apiGroups:
   - kueue.x-k8s.io
   resources:
   - admissionchecks
   - workloads
   - clusterqueues
+  - resourceflavors
   verbs:
   - create
   - delete
@@ -194,7 +232,7 @@ rules:
   - list
   - patch
   - update
-  - watch   
+  - watch
 - apiGroups:
   - kueue.x-k8s.io
   resources:
@@ -205,7 +243,7 @@ rules:
   - list
   - patch
   - update
-  - watch    
+  - watch
 - apiGroups:
   - kueue.x-k8s.io
   resources:
@@ -216,7 +254,7 @@ rules:
   - list
   - patch
   - update
-  - watch      
+  - watch
 - apiGroups:
   - batch
   resources:
@@ -240,7 +278,37 @@ rules:
   - list
   - patch
   - update
-  - watch    
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+- apiGroups:
+  - tenancy.kflex.kubestellar.org
+  resources:
+  - controlplanes
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - control.kubestellar.io
+  resources:
+  - combinedstatuses
+  - combinedstatuses/results
+  verbs:
+  - get
+  - list
+  - watch
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -250,6 +318,15 @@ rules:
   - ""
   resources:
   - nodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - control.kubestellar.io
+  resources:
+  - combinedstatuses
+  - combinedstatuses/results
   verbs:
   - get
   - list
@@ -299,13 +376,14 @@ rules:
   - list
   - patch
   - update
-  - watch   
+  - watch
 - apiGroups:
   - kueue.x-k8s.io
   resources:
   - admissionchecks
   - workloads
   - clusterqueues
+  - resourceflavors
   verbs:
   - create
   - delete
@@ -313,7 +391,7 @@ rules:
   - list
   - patch
   - update
-  - watch  
+  - watch
 - apiGroups:
   - kueue.x-k8s.io
   resources:
@@ -335,7 +413,7 @@ rules:
   - list
   - patch
   - update
-  - watch      
+  - watch
 - apiGroups:
   - batch
   resources:
@@ -359,7 +437,28 @@ rules:
   - list
   - patch
   - update
-  - watch    
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+- apiGroups:
+  - tenancy.kflex.kubestellar.org
+  resources:
+  - controlplanes
+  verbs:
+  - get
+  - list
+
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -508,22 +607,22 @@ spec:
             drop:
             - ALL
       - args:
-        - --health-probe-bind-address=:8081
+        - --health-probe-bind-address=:8085
         - --metrics-bind-address=127.0.0.1:8080
         - --leader-elect
-        image: ko.local/kueue-ks:102f815
+        image: ko.local/kueue-ks:3799da5
         livenessProbe:
           httpGet:
             path: /healthz
-            port: 8081
-          initialDelaySeconds: 15
+            port: 8085
+          initialDelaySeconds: 7200
           periodSeconds: 20
         name: manager
         readinessProbe:
           httpGet:
             path: /readyz
-            port: 8081
-          initialDelaySeconds: 5
+            port: 8085
+          initialDelaySeconds: 7200
           periodSeconds: 10
         resources:
           limits:

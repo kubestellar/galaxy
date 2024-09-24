@@ -66,7 +66,7 @@ EOF
 json_workflow_defaults=$(echo "$new_workflow_defaults" | yq eval -o=json)
 
 kubectl --context ${CONTEXT} -n ${NAMESPACE} patch configmap "$CONFIGMAP_NAME" --type merge -p "{\"data\": $json_workflow_defaults}"
-} 
+}
 
 
 ##################################################################################################
@@ -121,7 +121,7 @@ kind: ConfigMap
 metadata:
   name: pipeline-install-config
 data:
-  dbHost: ${HOSTING_CLUSTER_NODE} 
+  dbHost: ${HOSTING_CLUSTER_NODE}
   dbPort: "${mysqlNPort}"
   mysqlHost: ${HOSTING_CLUSTER_NODE}
   mysqlPort: "${mysqlNPort}"

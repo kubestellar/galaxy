@@ -48,7 +48,5 @@ lokiNPort=$(kubectl --context kind-kubeflex -n loki get service loki-nodeport -o
 : install promtail on WECs
 
 for cluster in "${clusters[@]}"; do
-    helm --kube-context ${cluster} upgrade --install promtail grafana/promtail --set "config.clients[0].url=http://kubeflex-control-plane:${lokiNPort}/loki/api/v1/push" 
+    helm --kube-context ${cluster} upgrade --install promtail grafana/promtail --set "config.clients[0].url=http://kubeflex-control-plane:${lokiNPort}/loki/api/v1/push"
 done
-
-

@@ -1,5 +1,5 @@
 # Multi-cluster Job Workload Management with Kueue and KubeStellar
-This project aims to simplify the deployment and management of batch workloads across multiple Kubernetes clusters using [Kueue](https://kueue.sigs.k8s.io) for job queueing and [KubeStellar](https://docs.kubestellar.io) for multi-cluster configuration management. 
+This project aims to simplify the deployment and management of batch workloads across multiple Kubernetes clusters using [Kueue](https://kueue.sigs.k8s.io) for job queueing and [KubeStellar](https://docs.kubestellar.io) for multi-cluster configuration management.
 
 
 ## Overview
@@ -11,7 +11,7 @@ This repository contains two core controllers:
 ## Description
 In multi-cluster Kubernetes environments, managing batch workloads and ensuring efficient resource utilization across clusters can be a complex challenge. Organizations often face issues such as resource contention, over-provisioning, and inefficient workload distribution, leading to suboptimal resource utilization and increased costs.
 
-The kueue-ks project goal is to address these challenges by leveraging Kueue's quota management capabilities and integrating with KubeStellar for multi-cluster configuration management. The primary goal is to enable centralized management and intelligent distribution of batch workloads across multiple clusters based on available resource quotas. 
+The kueue-ks project goal is to address these challenges by leveraging Kueue's quota management capabilities and integrating with KubeStellar for multi-cluster configuration management. The primary goal is to enable centralized management and intelligent distribution of batch workloads across multiple clusters based on available resource quotas.
 
 
 ## Getting Started
@@ -36,8 +36,8 @@ kubectl create -f examples/pytorch-simple-job.yaml
 ### How it works
 This project aims to follow the Kubernetes [Operator pattern](https://kubernetes.io/docs/concepts/extend-kubernetes/operator/)
 
-It uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/) 
-which provides a reconcile function responsible for synchronizing resources untile the desired state is reached on the cluster 
+It uses [Controllers](https://kubernetes.io/docs/concepts/architecture/controller/)
+which provides a reconcile function responsible for synchronizing resources untile the desired state is reached on the cluster
 
 ### Test It Out
 1. Install the CRDs into the cluster:
@@ -80,4 +80,3 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-

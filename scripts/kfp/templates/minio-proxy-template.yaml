@@ -34,7 +34,7 @@ metadata:
   name: minio-proxy-config
   namespace: kubeflow
 data:
-  nginx.conf: |-  
+  nginx.conf: |-
     upstream minio {
       server kubeflex-control-plane:NODE_PORT;
     }
@@ -67,7 +67,7 @@ data:
 
         proxy_pass http://minio; # This uses the upstream directive definition to load balance
       }
-    }  
+    }
 
 ---
 apiVersion: v1

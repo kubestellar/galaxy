@@ -12,4 +12,4 @@ subjects:
   namespace: kubeflex-system
 - kind: ServiceAccount
   name: kubeflex-controller-manager
-  namespace: wds0-system  
+  namespace: wds0-system

@@ -80,7 +80,7 @@ for cluster in "${clusters[@]}"; do
   kubectl --context kind-kubeflex apply -f ${SCRIPT_DIR}/samples/wf-binding-policy-${cluster}.yaml
 done
 
-# install webhook only if flag --webhook is present 
+# install webhook only if flag --webhook is present
 if [[ "${install_webhook}" == "--webhook" ]]; then
   : install mutating admission webhook for workflows on kind-kubeflex
 
@@ -91,7 +91,7 @@ if [[ "${install_webhook}" == "--webhook" ]]; then
   : wait for admission webhook to be up
 
   wait-for-cmd '(($(wrap-cmd kubectl --context kind-kubeflex get deployments -n ksi-system -o jsonpath='{.status.readyReplicas}' suspend-webhook 2>/dev/null || echo 0) >= 1))'
-fi  
+fi
 
 echo "you can access the argo console at https://argo.localtest.me:9443"
 echo "you can access the minio console at http://minio.localtest.me:9080"

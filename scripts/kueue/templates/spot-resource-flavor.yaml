@@ -4,4 +4,4 @@ metadata:
   name: "spot"
 spec:
   nodeLabels:
-    instance-type: spot
+    instance: spot

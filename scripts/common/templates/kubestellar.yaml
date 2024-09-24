@@ -5,7 +5,7 @@ metadata:
   labels:
     kflex.kubestellar.io/cptype: wds
 spec:
-  templates: 
+  templates:
   - apiVersion: batch/v1
     kind: Job
     metadata:
@@ -53,6 +53,6 @@ spec:
             - name: HELM_CONFIG_HOME
               value: /tmp
             - name: HELM_CACHE_HOME
-              value: /tmp 
+              value: /tmp
           restartPolicy: Never
       backoffLimit: 1

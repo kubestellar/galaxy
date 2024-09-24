@@ -21,7 +21,7 @@ spec:
             - init
             env:
             - name: KUBECONFIG
-              value: "/etc/kube/kubeconfig-incluster"    
+              value: "/etc/kube/kubeconfig-incluster"
             volumeMounts:
             - name: kubeconfig
               mountPath: "/etc/kube"
@@ -48,7 +48,7 @@ spec:
             volumeMounts:
             - mountPath: /etc/kube
               name: kubeconfig
-              readOnly: true    
+              readOnly: true
           volumes:
           - name: kubeconfig
             secret:

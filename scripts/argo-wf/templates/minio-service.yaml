@@ -15,5 +15,3 @@ spec:
     app: minio
   sessionAffinity: None
   type: NodePort
-
-  

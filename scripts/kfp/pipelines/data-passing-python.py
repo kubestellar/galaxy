@@ -145,8 +145,8 @@ def data_passing_pipeline(message: str = 'message'):
     train_task.set_cpu_request('1000m').set_cpu_limit('1000m')
     train_task.set_memory_request('1024Mi').set_memory_limit('1024Mi')
     # below is how to add nvidia GPU request
-    # train_task.add_node_selector_constraint('nvidia.com/gpu') 
+    # train_task.add_node_selector_constraint('nvidia.com/gpu')
     # train_task.set_gpu_limit(1)
-  
+
 if __name__ == '__main__':
     compiler.Compiler().compile(data_passing_pipeline, __file__ + '.yaml')

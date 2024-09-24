@@ -1,10 +1,10 @@
 # README
 
-These scripts are currently supporting deployment of KubeStellar, Kueue, and integration controllers on K3D Kubernetes only. 
+These scripts are currently supporting deployment of KubeStellar, Kueue, and integration controllers on K3D Kubernetes only.
 
 ## Preparation
 
-Before runnning the scripts, make sure to increase your ulimits and 
+Before runnning the scripts, make sure to increase your ulimits and
 fs.inotify.max_user_watches and fs.inotify.max_user_instances for the machine
 running the kind clusters. See [these instructions](https://kind.sigs.k8s.io/docs/user/known-issues/#pod-errors-due-to-too-many-open-files) for more info.
 

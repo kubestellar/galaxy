@@ -11,4 +11,4 @@ spec:
   - objectSelectors:
     - matchLabels:
         kubestellar.io/cluster: cluster1
-  wantSingletonReportedState: true	
+  wantSingletonReportedState: true

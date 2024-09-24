@@ -34,6 +34,8 @@ function wait-for-cmd() (
 
 export -f wait-for-cmd
 
+
+
 # expect-cmd-output takes two arguments:
 # - a command to execute to produce some output, and
 # - a command to test that output (received on stdin).
@@ -61,7 +63,7 @@ function wait-for-deployment() {
 if [ "$#" -ne 3 ]; then
   echo "Usage: $0 <context> <namespace> <deployment-name>"
   exit 1
-fi    
+fi
 
 CONTEXT=$1
 NAMESPACE=$2
@@ -90,7 +92,7 @@ while :; do
     else
         echo "Deployment $DEPLOYMENT_NAME does not exist in the namespace $NAMESPACE and context $CONTEXT"
     fi
-    
+
     # Sleep before checking again
     echo "Sleeping for $SLEEP_SECONDS seconds..."
     sleep "$SLEEP_SECONDS"

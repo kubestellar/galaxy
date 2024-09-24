@@ -1,0 +1,15 @@
+apiVersion: control.kubestellar.io/v1alpha1
+kind: BindingPolicy
+metadata:
+  name: jobs-bindingpolicy
+spec:
+  clusterSelectors:
+  - matchLabels:
+      name: cluster2
+  downsync:
+    - objectSelectors:
+      - matchLabels:
+          target: cluster2
+    - statusCollectors:
+      - jobs-status-aggregator
+  wantSingletonReportedState: true
