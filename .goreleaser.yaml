@@ -94,8 +94,8 @@ builds:
   - goos: darwin
     goarch: ppc64le
   env:
-  - CGO_ENABLED=0   
-kos:           
+  - CGO_ENABLED=0
+kos:
   - repository: ghcr.io/kubestellar/galaxy/cluster-metrics
     working_dir: clustermetrics
     main: ./cmd/cluster-metrics
@@ -197,10 +197,8 @@ kos:
     - linux/amd64
     - linux/arm64
     env:
-    - CGO_ENABLED=0     
+    - CGO_ENABLED=0
 release:
   draft: false
   prerelease: auto
   mode: keep-existing
-
-

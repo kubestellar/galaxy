@@ -172,7 +172,7 @@ chart: manifests kustomize
 	$(KUSTOMIZE) build config/crd > ../charts/cluster-metrics/crds/crds.yaml
 
 .PHONY: ko-local-build
-ko-local-build: 
+ko-local-build:
 	KO_DOCKER_REPO=${KO_DOCKER_REPO} ko build -B ./cmd/${CMD_NAME} -t ${IMAGE_TAG} --platform linux/${ARCH}
 
 # this is used for local testing

@@ -175,7 +175,7 @@ undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.
 # Shadow pods local images and charts
 
 .PHONY: shadow-local-build
-shadow-local-build: 
+shadow-local-build:
 	KO_DOCKER_REPO=${KO_DOCKER_REPO} ko build -B ./cmd/${SHADOW_PODS_CMD_NAME} -t ${IMAGE_TAG} --platform linux/${ARCH}
 
 .PHONY: kind-load-shadow-image
@@ -184,12 +184,12 @@ kind-load-shadow-image:
 
 .PHONY: install-shadow-local-chart
 install-shadow-local-chart: kind-load-shadow-image kind-load-loki-logger-image
-	helm upgrade --install -n ksi-system --create-namespace  --set image.repository=ko.local/${SHADOW_PODS_CMD_NAME} --set=image.tag=${IMAGE_TAG} --set lokiLoggerImage.repository=ko.local/${LOKI_LOGGER_CMD_NAME} --set=lokiLoggerImage.tag=${IMAGE_TAG} shadow-pods ../charts/shadow-pods 
+	helm upgrade --install -n ksi-system --create-namespace  --set image.repository=ko.local/${SHADOW_PODS_CMD_NAME} --set=image.tag=${IMAGE_TAG} --set lokiLoggerImage.repository=ko.local/${LOKI_LOGGER_CMD_NAME} --set=lokiLoggerImage.tag=${IMAGE_TAG} shadow-pods ../charts/shadow-pods
 
 # Loki logger local image
 
 .PHONY: loki-logger-local-build
-loki-logger-local-build: 
+loki-logger-local-build:
 	KO_DOCKER_REPO=${KO_DOCKER_REPO} ko build -B ./cmd/${LOKI_LOGGER_CMD_NAME} -t ${IMAGE_TAG} --platform linux/${ARCH}
 
 .PHONY: kind-load-loki-logger-image

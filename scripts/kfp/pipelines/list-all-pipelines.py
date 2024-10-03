@@ -10,4 +10,3 @@ with warnings.catch_warnings():
     if hasattr(response, 'pipelines'):
         for pipeline in response.pipelines:
             print(pipeline)
-           

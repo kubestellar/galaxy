@@ -46,11 +46,14 @@ const (
 	// Having multiple AdmissionChecks managed by the same controller where at least one has this condition
 	// set to true will cause the ClusterQueue to be marked as Inactive.
 	AdmissionChecksSingleInstanceInClusterQueue string = "SingleInstanceInClusterQueue"
+	FlavorIndependentAdmissionCheck             string = "FlavorIndependent"
 )
 const (
-	ControllerName        = "kubestellar.io/ks-kueue"
-	SingleInstanceReason  = "KubestellarKueue"
-	SingleInstanceMessage = "only one KubestellarKueue managed admission check can be used in one ClusterQueue"
+	ControllerName                = "kubestellar.io/ks-kueue"
+	SingleInstanceReason          = "KubestellarKueue"
+	SingleInstanceMessage         = "only one KubestellarKueue managed admission check can be used in one ClusterQueue"
+	FlavorIndependentCheckReason  = "MultiKueue"
+	FlavorIndependentCheckMessage = "admission check cannot be applied at ResourceFlavor level"
 )
 
 //+kubebuilder:rbac:groups=kueue.x-k8s.io.galaxy.kubestellar.io,resources=admissionchecks,verbs=get;list;watch;create;update;patch;delete
@@ -97,6 +100,16 @@ func (r *AdmissionCheckReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		needsUpdate = true
 	}
 
+	if !apimeta.IsStatusConditionTrue(ac.Status.Conditions, FlavorIndependentAdmissionCheck) {
+		apimeta.SetStatusCondition(&ac.Status.Conditions, metav1.Condition{
+			Type:               FlavorIndependentAdmissionCheck,
+			Status:             metav1.ConditionTrue,
+			Reason:             FlavorIndependentCheckReason,
+			Message:            FlavorIndependentCheckMessage,
+			ObservedGeneration: ac.Generation,
+		})
+		needsUpdate = true
+	}
 	if needsUpdate {
 		err := r.Client.Status().Update(ctx, ac)
 		if err != nil {

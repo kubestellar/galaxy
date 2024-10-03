@@ -170,7 +170,7 @@ undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.
 # Webhook local images and charts
 
 .PHONY: webhook-local-build
-webhook-local-build: 
+webhook-local-build:
 	KO_DOCKER_REPO=${KO_DOCKER_REPO} ko build -B ./cmd/${WEBHOOK_CMD_NAME} -t ${IMAGE_TAG} --platform linux/${ARCH}
 
 .PHONY: kind-load-webhook-image

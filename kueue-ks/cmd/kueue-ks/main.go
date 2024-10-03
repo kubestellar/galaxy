@@ -17,33 +17,43 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
-	"os"
-
-	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
-	// to ensure that exec-entrypoint and run can make use of them.
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	"k8s.io/client-go/restmapper"
-
+	"fmt"
+	metricsv1alpha1 "kubestellar/galaxy/clustermetrics/api/v1alpha1"
 	"kubestellar/galaxy/kueue-ks/controllers"
+	scheduler "kubestellar/galaxy/mc-scheduling/pkg/scheduler"
+	"os"
+	"time"
 
+	kfv1aplha1 "github.com/kubestellar/kubeflex/api/v1alpha1"
 	ksv1alpha1 "github.com/kubestellar/kubestellar/api/control/v1alpha1"
+	kslclient "github.com/kubestellar/kubestellar/pkg/client"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	metricsv1alpha1 "kubestellar/galaxy/clustermetrics/api/v1alpha1"
-	scheduler "kubestellar/galaxy/mc-scheduling/pkg/scheduler"
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/restmapper"
+	"k8s.io/client-go/tools/clientcmd"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	kueue "sigs.k8s.io/kueue/apis/kueue/v1beta1"
 	kueueClient "sigs.k8s.io/kueue/client-go/clientset/versioned"
-	//+kubebuilder:scaffold:imports
+	// +kubebuilder:scaffold:imports
 )
 
 var (
@@ -51,11 +61,26 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
+var (
+	kubeconfig string
+	k8sctx     = context.Background()
+)
+
+const (
+	ControlPlaneTypeLabel    = "kflex.kubestellar.io/cptype"
+	ControlPlaneTypeITS      = "its"
+	ErrNoControlPlane        = "no control plane found. At least one control plane labeled with %s=%s must be present"
+	ErrControlPlaneNotFound  = "control plane with type %s and name %s was not found"
+	ErrMultipleControlPlanes = "more than one control plane of type %s was found and no name was specified"
+)
+
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(kueue.AddToScheme(scheme))
 	utilruntime.Must(ksv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(metricsv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(clusterv1.AddToScheme(scheme))
+
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -66,9 +91,9 @@ func main() {
 	var probeAddr string
 	var enableHTTP2 bool
 	var clusterQueue string
-
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	var defaultResourceFlavorName string
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8085", "The address the metric endpoint binds to.")
+	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8086", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -77,7 +102,7 @@ func main() {
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.StringVar(&clusterQueue, "clusterQueue-name", "cluster-queue-ks", "cluster queue name")
-
+	flag.StringVar(&defaultResourceFlavorName, "defaultResourceFlavorName", "default-flavor", "default flavor name")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -96,6 +121,7 @@ func main() {
 		c.NextProtos = []string{"http/1.1"}
 	}
 
+	enableLeaderElection = false
 	tlsOpts := []func(*tls.Config){}
 	if !enableHTTP2 {
 		tlsOpts = append(tlsOpts, disableHTTP2)
@@ -103,92 +129,200 @@ func main() {
 	webhookServer := webhook.NewServer(webhook.Options{
 		TLSOpts: tlsOpts,
 	})
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme: scheme,
-		Metrics: metricsserver.Options{
-			BindAddress:   metricsAddr,
-			SecureServing: secureMetrics,
-			TLSOpts:       tlsOpts,
+
+	kflexConfig, err := rest.InClusterConfig()
+	if err != nil {
+		setupLog.Error(err, "unable to get kubeconfig")
+		os.Exit(1)
+	}
+
+	kflexMgr, err := manager.New(kflexConfig,
+		ctrl.Options{
+			Scheme: scheme,
+
+			Metrics: metricsserver.Options{
+				BindAddress:   metricsAddr,
+				SecureServing: secureMetrics,
+				TLSOpts:       tlsOpts,
+			},
+
+			WebhookServer:          webhookServer,
+			HealthProbeBindAddress: probeAddr,
+			LeaderElection:         enableLeaderElection,
+			LeaderElectionID:       "423ebda8.kubestellar.io",
 		},
-		WebhookServer:          webhookServer,
-		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "423ebda8.kubestellar.io",
-		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
-		// when the Manager ends. This requires the binary to immediately end when the
-		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
-		// speeds up voluntary leader transitions as the new leader don't have to wait
-		// LeaseDuration time first.
-		//
-		// In the default scaffold provided, the program ends immediately after
-		// the manager stops, so would be fine to enable this option. However,
-		// if you are doing or is intended to do any operation such as perform cleanups
-		// after the manager stops then its usage might be unsafe.
-		// LeaderElectionReleaseOnCancel: true,
-	})
+	)
+
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+
+	if err = (&controllers.ClusterMetricsReconciler{
+		Client:                    kflexMgr.GetClient(),
+		Scheme:                    kflexMgr.GetScheme(),
+		WorkerClusters:            make(map[string]metricsv1alpha1.ClusterMetrics),
+		ClusterQueue:              clusterQueue,
+		DefaultResourceFlavorName: defaultResourceFlavorName,
+	}).SetupWithManager(kflexMgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ClusterMetrics")
+		os.Exit(1)
+	}
+	if err = (&controllers.AdmissionCheckReconciler{
+		Client: kflexMgr.GetClient(),
+		Scheme: kflexMgr.GetScheme(),
+	}).SetupWithManager(kflexMgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "AdmissionCheck")
+		os.Exit(1)
+	}
+
 	kClient, err := kueueClient.NewForConfig(ctrl.GetConfigOrDie())
 	if err != nil {
 		setupLog.Error(err, "unable to locate Config")
 		os.Exit(1)
 	}
-
-	// in reality, you would only construct these once
-	clientset, err := kubernetes.NewForConfig(ctrl.GetConfigOrDie())
+	clientset, err := kubernetes.NewForConfig(kflexConfig)
 	if err != nil {
 		setupLog.Error(err, "unable to locate Config")
 		os.Exit(1)
 	}
 
+	dynClient, err := dynamic.NewForConfig(kflexConfig)
+	if err != nil {
+		setupLog.Error(err, "unable to create dynamic client")
+		os.Exit(1)
+	}
 	groupResources, err := restmapper.GetAPIGroupResources(clientset.Discovery())
 	if err != nil {
 		setupLog.Error(err, "unable to locate Config")
 		os.Exit(1)
 	}
+
 	rm := restmapper.NewDiscoveryRESTMapper(groupResources)
+
 	if err = (&controllers.WorkloadReconciler{
-		Client:        mgr.GetClient(),
+		Client:        kflexMgr.GetClient(),
 		KueueClient:   kClient,
-		DynamicClient: dynamic.NewForConfigOrDie(ctrl.GetConfigOrDie()),
+		DynamicClient: dynClient,
 		RestMapper:    rm,
 		Scheduler:     scheduler.NewDefaultScheduler(),
-	}).SetupWithManager(mgr); err != nil {
+		Recorder:      kflexMgr.GetEventRecorderFor("job-recorder"),
+	}).SetupWithManager(kflexMgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Workload")
 		os.Exit(1)
 	}
-	if err = (&controllers.ClusterMetricsReconciler{
-		Client:         mgr.GetClient(),
-		Scheme:         mgr.GetScheme(),
-		WorkerClusters: make(map[string]metricsv1alpha1.ClusterMetrics),
-		ClusterQueue:   clusterQueue,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ClusterMetrics")
-		os.Exit(1)
-	}
-	if err = (&controllers.AdmissionCheckReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "AdmissionCheck")
-		os.Exit(1)
-	}
+
 	//+kubebuilder:scaffold:builder
 
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up health check")
-		os.Exit(1)
+	go func() {
+		if err := kflexMgr.Start(k8sctx); err != nil {
+			setupLog.Error(err, "problem running kubeflex manager")
+			os.Exit(1)
+		}
+	}()
+
+	select {}
+}
+
+// SetupWithManager sets up the controller with the Manager.
+func setupReconciller(its1Mgr ctrl.Manager, kflexMgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(kflexMgr).
+		Complete(&controllers.ManagedClusterReconciler{
+			Scheme:         its1Mgr.GetScheme(),
+			Its1Client:     its1Mgr.GetClient(),
+			KubeflexClient: kflexMgr.GetClient(),
+		})
+}
+
+func getRestConfig(cpName, labelValue string) (*rest.Config, string, error) {
+	logger := log.FromContext(k8sctx)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	kubeClient := *kslclient.GetClient()
+	labelSelector := labels.SelectorFromSet(labels.Set(map[string]string{
+		ControlPlaneTypeLabel: labelValue,
+	}))
+	var targetCP *kfv1aplha1.ControlPlane
+
+	// wait until there are control planes with supplied labels
+	logger.Info("Waiting for cp", "type", labelValue, "name", cpName)
+	err := wait.PollUntilContextCancel(ctx, 2*time.Second, true, func(ctx context.Context) (bool, error) {
+		if cpName != "" {
+			cp := &kfv1aplha1.ControlPlane{}
+			err := kubeClient.Get(ctx, client.ObjectKey{Name: cpName}, cp, &client.GetOptions{})
+			if err == nil {
+				targetCP = cp
+				return true, nil
+			}
+			logger.Error(err, "Unable to connect to its1")
+			return false, nil
+		}
+		list := &kfv1aplha1.ControlPlaneList{}
+		err := kubeClient.List(ctx, list, &client.ListOptions{LabelSelector: labelSelector})
+		if err != nil {
+			logger.Info("Failed to list control planes, will retry", "err", err)
+			return false, nil
+		}
+		if len(list.Items) == 0 {
+			logger.Info("No control planes yet, will retry")
+			return false, nil
+		}
+		if len(list.Items) == 1 {
+			targetCP = &list.Items[0]
+			return true, nil
+		}
+		// TODO - we do not allow this case for a WDS as there is a 1:1 relashionship controller:cp for WDS.
+		// Need to revisit for ITS where we can have multiple shards.
+		// Assume we are not waiting for control planes to go away.
+		return true, fmt.Errorf(ErrMultipleControlPlanes, labelValue)
+	})
+	if err != nil {
+		return nil, "", err
 	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up ready check")
-		os.Exit(1)
+	if targetCP == nil {
+		if cpName != "" {
+			return nil, "", fmt.Errorf(ErrControlPlaneNotFound, labelValue, cpName)
+		}
+		return nil, "", fmt.Errorf(ErrNoControlPlane, ControlPlaneTypeLabel, labelValue)
 	}
 
-	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
-		os.Exit(1)
+	clientset, err := kubernetes.NewForConfig(ctrl.GetConfigOrDie())
+	if err != nil {
+		return nil, "", fmt.Errorf("error creating new clientset: %w", err)
 	}
+
+	if targetCP.Status.SecretRef == nil {
+		return nil, "", fmt.Errorf("access secret reference doesn't exist for %s", targetCP.Name)
+	}
+	namespace := targetCP.Status.SecretRef.Namespace
+	name := targetCP.Status.SecretRef.Name
+	key := targetCP.Status.SecretRef.InClusterKey
+
+	// determine if the configuration is in-cluster or off-cluster and use related key
+	_, err = rest.InClusterConfig()
+	if err != nil { // off-cluster
+		key = targetCP.Status.SecretRef.Key
+	}
+
+	secret, err := clientset.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, "", fmt.Errorf("error getting secrets: %w", err)
+	}
+
+	restConf, err := restConfigFromBytes(secret.Data[key])
+	if err != nil {
+		return nil, "", fmt.Errorf("error getting rest config from bytes: %w", err)
+	}
+
+	return restConf, targetCP.Name, nil
+}
+
+func restConfigFromBytes(kubeconfig []byte) (*rest.Config, error) {
+	clientConfig, err := clientcmd.NewClientConfigFromBytes(kubeconfig)
+	if err != nil {
+		return nil, err
+	}
+
+	return clientConfig.ClientConfig()
 }

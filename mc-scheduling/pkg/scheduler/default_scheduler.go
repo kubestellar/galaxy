@@ -73,7 +73,7 @@ func (d *DefaultScheduler) SelectCluster(podSpecList []*corev1.PodSpec, clusterM
 		}
 		fmt.Printf("name=%s cpu=%s memory=%s\n", clusterMetrics.Name, clusterMetrics.Status.Nodes[0].AllocatedResourceRequests.Cpu(), clusterMetrics.Status.Nodes[0].AllocatedResourceRequests.Memory())
 		clusterScore := score{name: clusterMetrics.Name}
-		
+
 		nodeSelectorDefined := false
 		for _, podSpec := range podSpecList {
 			fmt.Printf("Cpu Request: %s Memory Request %s\n", podSpec.Containers[0].Resources.Requests.Cpu(), podSpec.Containers[0].Resources.Requests.Memory())
@@ -165,7 +165,7 @@ func scoreNodesForPodSpec(podSpec *corev1.PodSpec, clusterMetrics *cmv1alpha1.Cl
 			} else {
 				continue // nodeSelector is set but node is missing labels
 			}
-		} 
+		}
 		nodeScore := computeNodeScoreForPod(node, podSpec)
 		nodeScores = append(nodeScores, nodeScore)
 	}
@@ -181,7 +181,7 @@ func nodeSelectorMatches(nodeSelector map[string]string, nodeLabels map[string]s
 }
 
 // get total pod resources
-func getTotalPodResources(podSpec *corev1.PodSpec) (PodResources,resource.Quantity,resource.Quantity) {
+func getTotalPodResources(podSpec *corev1.PodSpec) (PodResources, resource.Quantity, resource.Quantity) {
 	podRes := PodResources{}
 	gpuRequestsCount := resource.Quantity{}
 	gpuLimitsCount := resource.Quantity{}
@@ -211,12 +211,12 @@ func getTotalPodResources(podSpec *corev1.PodSpec) (PodResources,resource.Quanti
 
 	adjustResourcesTotalsForInitContainers(podSpec, &podRes, &gpuRequestsCount, &gpuLimitsCount)
 
-	return podRes,gpuRequestsCount,gpuLimitsCount
+	return podRes, gpuRequestsCount, gpuLimitsCount
 }
 
 // get the max for resources assocuated with all init containers in a pod
 // this should be  compared with the sum of resources for all containers in the pod
-func getMaxInitContainersResources(podSpec *corev1.PodSpec) (PodResources,resource.Quantity,resource.Quantity) {
+func getMaxInitContainersResources(podSpec *corev1.PodSpec) (PodResources, resource.Quantity, resource.Quantity) {
 	max := PodResources{}
 	maxGpuRequestsCount := resource.Quantity{}
 	maxGpuLimitsCount := resource.Quantity{}
@@ -248,7 +248,7 @@ func getMaxInitContainersResources(podSpec *corev1.PodSpec) (PodResources,resour
 				max.MemoryLimit = *container.Resources.Limits.Memory()
 			}
 		}
-		
+
 		lv, ok := container.Resources.Limits[NVIDIA]
 		if ok {
 			if maxGpuLimitsCount.Cmp(lv) == -1 {
@@ -259,7 +259,7 @@ func getMaxInitContainersResources(podSpec *corev1.PodSpec) (PodResources,resour
 	return max, maxGpuRequestsCount, maxGpuLimitsCount
 }
 
-func adjustResourcesTotalsForInitContainers(podSpec *corev1.PodSpec, podRes *PodResources,podGpuRequests *resource.Quantity, podGpuLimits *resource.Quantity) {
+func adjustResourcesTotalsForInitContainers(podSpec *corev1.PodSpec, podRes *PodResources, podGpuRequests *resource.Quantity, podGpuLimits *resource.Quantity) {
 	maxInitContainerResources, maxGpuRequests, maxGpuLimits := getMaxInitContainersResources(podSpec)
 
 	if maxInitContainerResources.CPURequest.Cmp(podRes.CPURequest) == 1 {
@@ -285,21 +285,21 @@ func adjustResourcesTotalsForInitContainers(podSpec *corev1.PodSpec, podRes *Pod
 // computeNodeScoreForPod: compute the score to run a pod on a node
 func computeNodeScoreForPod(node cmv1alpha1.NodeInfo, podSpec *corev1.PodSpec) score {
 	nodeScore := score{name: node.Name}
-	totalPodResourceRequests,totalGpuRequests,_ := getTotalPodResources(podSpec)
+	totalPodResourceRequests, totalGpuRequests, _ := getTotalPodResources(podSpec)
 	availableResources := getAvailableNodeResources(node)
-    
+
 	// check if pod fits node. No fit returns a score == 0
 	if availableResources.Cpu().Cmp(totalPodResourceRequests.CPURequest) >= 0 &&
 		availableResources.Memory().Cmp(totalPodResourceRequests.MemoryRequest) >= 0 {
-            var gpuScore int64
-			if totalGpuRequests.Value() > 0 {
-				for resourceName, resource := range availableResources {
-					if resourceName == NVIDIA && resource.Cmp(totalGpuRequests) >= 0 {
-						gpuScore = resource.Value() - totalGpuRequests.Value()
-						break
-					}
+		var gpuScore int64
+		if totalGpuRequests.Value() > 0 {
+			for resourceName, resource := range availableResources {
+				if resourceName == NVIDIA && resource.Cmp(totalGpuRequests) >= 0 {
+					gpuScore = resource.Value() - totalGpuRequests.Value()
+					break
 				}
 			}
+		}
 		cpuScore := availableResources.Cpu().MilliValue() - totalPodResourceRequests.CPURequest.MilliValue()
 		memScore := availableResources.Memory().Value() - totalPodResourceRequests.MemoryRequest.Value()
 
@@ -343,7 +343,7 @@ func getAvailableNodeResources(node cmv1alpha1.NodeInfo) corev1.ResourceList {
 func updateNodeResourceForPod(podSpec *corev1.PodSpec, clusterMetrics *cmv1alpha1.ClusterMetrics, nodeScore score) {
 	for _, nodeInfo := range clusterMetrics.Status.Nodes {
 		if nodeInfo.Name == nodeScore.name {
-			podResources,podGpuRequests, podGpuLimits := getTotalPodResources(podSpec)
+			podResources, podGpuRequests, podGpuLimits := getTotalPodResources(podSpec)
 			subtractQuantity(nodeInfo.AllocatedResourceRequests, corev1.ResourceCPU, podResources.CPURequest)
 			subtractQuantity(nodeInfo.AllocatedResourceRequests, corev1.ResourceMemory, podResources.MemoryLimit)
 			subtractQuantity(nodeInfo.AllocatedResourceRequests, NVIDIA, podGpuRequests)

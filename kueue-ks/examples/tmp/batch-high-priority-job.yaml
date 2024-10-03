@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: h100-job-
+  namespace: default
+  labels:
+    kueue.x-k8s.io/queue-name: user-queue-ks
+    kueue.x-k8s.io/priority-class: sample-priority
+spec:
+  parallelism: 3
+  completions: 3
+
+  template:
+    spec:
+      nodeSelector:
+        instance: h100
+      containers:
+      - name: dummy-job
+        image: gcr.io/k8s-staging-perf-tests/sleep:v0.1.0
+        args: ["50s"]
+        resources:
+          requests:
+            cpu: 1
+            memory: "200Mi"
+#            nvidia.com/gpu: "1"
+          limits:
+            memory: "200Mi"
+            cpu: 1
+#            nvidia.com/gpu: "1"
+      restartPolicy: Never

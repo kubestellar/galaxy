@@ -8,19 +8,24 @@ spec:
 #  - coveredResources: ["cpu", "memory", "nvidia.com/gpu"]
   - coveredResources: ["cpu", "memory"]
     flavors:
+    - name: "reserved"
+      resources:
+      - name: "cpu"
+        nominalQuota: 0
+      - name: "memory"
+        nominalQuota: 0Gi
+    - name: "on-demand"
+      resources:
+      - name: "cpu"
+        nominalQuota: 0
+      - name: "memory"
+        nominalQuota: 0Gi
     - name: "spot"
       resources:
       - name: "cpu"
         nominalQuota: 0
       - name: "memory"
         nominalQuota: 0Gi
-    
-    - name: "default-flavor"
-      resources:
-      - name: "cpu"
-        nominalQuota: 9
-      - name: "memory"
-        nominalQuota: 4Gi
 
   admissionChecks:
   - kubestellar-admc

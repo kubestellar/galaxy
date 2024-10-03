@@ -1,0 +1,110 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - cluster.open-cluster-management.io.galaxy.kubestellar.io
+  resources:
+  - managedclusters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - cluster.open-cluster-management.io.galaxy.kubestellar.io
+  resources:
+  - managedclusters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - cluster.open-cluster-management.io.galaxy.kubestellar.io
+  resources:
+  - managedclusters/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - galaxy.kubestellar.io.galaxy.kubestellar.io
+  resources:
+  - clustermetrics
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - galaxy.kubestellar.io.galaxy.kubestellar.io
+  resources:
+  - clustermetrics/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - galaxy.kubestellar.io.galaxy.kubestellar.io
+  resources:
+  - clustermetrics/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - kueue.x-k8s.io.galaxy.kubestellar.io
+  resources:
+  - admissionchecks
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kueue.x-k8s.io.galaxy.kubestellar.io
+  resources:
+  - admissionchecks/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - kueue.x-k8s.io.galaxy.kubestellar.io
+  resources:
+  - admissionchecks/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - kueue.x-k8s.io.galaxy.kubestellar.io
+  resources:
+  - workloads
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kueue.x-k8s.io.galaxy.kubestellar.io
+  resources:
+  - workloads/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - kueue.x-k8s.io.galaxy.kubestellar.io
+  resources:
+  - workloads/status
+  verbs:
+  - get
+  - patch
+  - update

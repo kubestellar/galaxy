@@ -8,8 +8,8 @@
 useradd <user>
 passwd <user>
 usermod -aG wheel <user>
-visudo 
-# add "<user> ALL=(ALL) NOPASSWD: ALL" 
+visudo
+# add "<user> ALL=(ALL) NOPASSWD: ALL"
 ```
 ### Installing docker
 
@@ -63,7 +63,7 @@ echo 'export PATH=$PATH:/home/paolo/go/bin' >>~/.bashrc
 
 ```shell
 curl -LO https://get.helm.sh/helm-v3.14.4-linux-amd64.tar.gz
-tar xzvf helm-v3.14.4-linux-amd64.tar.gz 
+tar xzvf helm-v3.14.4-linux-amd64.tar.gz
 sudo install -o root -g root -m 0755 linux-amd64/helm /usr/local/bin/helm
 ```
 

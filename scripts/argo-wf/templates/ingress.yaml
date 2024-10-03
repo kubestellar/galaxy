@@ -67,4 +67,4 @@ spec:
           service:
             name: minio-ui
             port:
-              name: dashboard              
+              name: dashboard
