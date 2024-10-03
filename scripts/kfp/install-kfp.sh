@@ -66,7 +66,7 @@ EOF
 json_workflow_defaults=$(echo "$new_workflow_defaults" | yq eval -o=json)
 
 kubectl --context ${CONTEXT} -n ${NAMESPACE} patch configmap "$CONFIGMAP_NAME" --type merge -p "{\"data\": $json_workflow_defaults}"
-} 
+}
 
 
 ##################################################################################################
@@ -115,17 +115,17 @@ kubectl --context ${CONTEXT} -n ${NAMESPACE} patch configmap "$CONFIGMAP_NAME" -
 # echo "minioNPort=${minioNPort} mysqlNPort=${mysqlNPort}"
 # sed "s/NODE_PORT/${minioNPort}/g" ${SCRIPT_DIR}/templates/minio-proxy-template.yaml > ${WORK_DIR}/minio-proxy.yaml
 
-# cat > ${SCRIPT_DIR}/kustomize/base/patch-pipeline-install-config.yaml <<EOL
-# apiVersion: v1
-# kind: ConfigMap
-# metadata:
-#   name: pipeline-install-config
-# data:
-#   dbHost: ${HOSTING_CLUSTER_NODE} 
-#   dbPort: "${mysqlNPort}"
-#   mysqlHost: ${HOSTING_CLUSTER_NODE}
-#   mysqlPort: "${mysqlNPort}"
-# EOL
+cat > ${SCRIPT_DIR}/kustomize/base/patch-pipeline-install-config.yaml <<EOL
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pipeline-install-config
+data:
+  dbHost: ${HOSTING_CLUSTER_NODE}
+  dbPort: "${mysqlNPort}"
+  mysqlHost: ${HOSTING_CLUSTER_NODE}
+  mysqlPort: "${mysqlNPort}"
+EOL
 
 # # use kustomization to avoid installing minio and mysql
 # for cluster in "${clusters[@]}"; do

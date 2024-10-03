@@ -50,4 +50,3 @@ spec:
     application-crd-id: kubeflow-pipelines
   sessionAffinity: None
   type: NodePort
-

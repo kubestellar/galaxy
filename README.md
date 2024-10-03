@@ -22,7 +22,7 @@ sync/status sycn mechanisms.
 Check out this [instructions](./scripts/kfp/)
 
 
-## Argo Workflows 
+## Argo Workflows
 
 Check out this [instructions](./scripts/argo-wf/)
 

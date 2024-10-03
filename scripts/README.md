@@ -2,9 +2,9 @@
 
 ## Pre-reqs
 
-Make sure you have the same pre-reqs required by [KubeStellar 0.22](https://docs.kubestellar.io/release-0.22.0/direct/pre-reqs/#kubestellar-prerequisites). 
+Make sure you have the same pre-reqs required by [KubeStellar 0.22](https://docs.kubestellar.io/release-0.22.0/direct/pre-reqs/#kubestellar-prerequisites).
 
-Make sure also go and make tools are installed. Note that this setup has been tested only on the 
+Make sure also go and make tools are installed. Note that this setup has been tested only on the
 following environments:
 
 - MacBook Pro:
@@ -23,7 +23,7 @@ See how to install the pre-reqs for a RHEL 9 VM [here](./RHEL-KS-install.md).
 
 ## Preparation
 
-Before runnning the scripts, make sure to increase your ulimits and 
+Before runnning the scripts, make sure to increase your ulimits and
 fs.inotify.max_user_watches and fs.inotify.max_user_instances for the machine
 running the kind clusters. See [these instructions](https://kind.sigs.k8s.io/docs/user/known-issues/#pod-errors-due-to-too-many-open-files) for more info.
 

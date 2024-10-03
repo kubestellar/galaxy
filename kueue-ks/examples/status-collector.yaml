@@ -1,0 +1,12 @@
+apiVersion: control.kubestellar.io/v1alpha1
+kind: StatusCollector
+metadata:
+  name: jobs-status-aggregator
+spec:
+  limit: 10
+  filter: obj.kind == "Job"
+  select:
+   - name: wec
+     def: inventory.name
+   - name: status
+     def: returned.status

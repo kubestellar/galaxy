@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: ko.local/cluster-metrics
-  newTag: 30f89a6
+  newTag: e559205

@@ -20,7 +20,7 @@ lokiLoggerImage:
 lokiInstallType: "dev"
 
 # name of secret with certificates for connecting to loki using TLS (it can be copied from the "openshift-logging" namespace)
-certsSecretName: "logging-loki-querier-http"  
+certsSecretName: "logging-loki-querier-http"
 
 imagePullSecrets: []
 nameOverride: ""

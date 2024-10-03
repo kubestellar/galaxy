@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -26,20 +27,27 @@ import (
 	scheduler "kubestellar/galaxy/mc-scheduling/pkg/scheduler"
 
 	ksv1alpha1 "github.com/kubestellar/kubestellar/api/control/v1alpha1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/client-go/util/workqueue"
+	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	kueue "sigs.k8s.io/kueue/apis/kueue/v1beta1"
@@ -51,10 +59,13 @@ import (
 // WorkloadReconciler reconciles a Workload object
 type WorkloadReconciler struct {
 	Client        client.Client
+	RestClient    rest.Interface
 	RestMapper    meta.RESTMapper
 	KueueClient   *kueueClient.Clientset
 	DynamicClient *dynamic.DynamicClient
 	Scheduler     scheduler.MultiClusterScheduler
+	Recorder      record.EventRecorder
+	clock         clock.Clock
 }
 
 const (
@@ -62,19 +73,23 @@ const (
 	KsLabelLocationGroup    = "edge"
 	KsLabelClusterNameKey   = "name"
 	AssignedClusterLabel    = "mcc.kubestellar.io/cluster"
+	NodeSelectorAddedBy     = "workloadcontroller"
+	NodeSelectorController  = "mcc.nodeselectororigin"
 )
 
 //+kubebuilder:rbac:groups=kueue.x-k8s.io.galaxy.kubestellar.io,resources=workloads,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=kueue.x-k8s.io.galaxy.kubestellar.io,resources=workloads/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=kueue.x-k8s.io.galaxy.kubestellar.io,resources=workloads/finalizers,verbs=update
 
-func NewWorkloadReconciler(c client.Client, kueueClient *kueueClient.Clientset, cfg *rest.Config, rm meta.RESTMapper) *WorkloadReconciler {
+func NewWorkloadReconciler(c client.Client, kueueClient *kueueClient.Clientset, cfg *rest.Config, rm meta.RESTMapper, record record.EventRecorder) *WorkloadReconciler {
 	return &WorkloadReconciler{
 		Client:        c,
 		RestMapper:    rm,
 		DynamicClient: dynamic.NewForConfigOrDie(cfg),
 		KueueClient:   kueueClient,
 		Scheduler:     scheduler.NewDefaultScheduler(),
+		Recorder:      record,
+		clock:         clock.RealClock{},
 	}
 }
 
@@ -84,50 +99,62 @@ func NewWorkloadReconciler(c client.Client, kueueClient *kueueClient.Clientset, 
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.12.1/pkg/reconcile
 func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
-	log.Info("Reconcile Workload ----")
+	log.V(4).Info("Reconcile Workload -----------------")
 
 	wl := &kueue.Workload{}
 	if err := r.Client.Get(ctx, req.NamespacedName, wl); err != nil {
 		log.Error(err, "Error when fetching Workload object ")
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
-	if !workload.HasQuotaReservation(wl) {
-		log.Info("workload with no reservation, delete owned requests")
-		return reconcile.Result{}, r.evictJob(ctx, wl)
-	}
 
-	if apimeta.IsStatusConditionTrue(wl.Status.Conditions, kueue.WorkloadFinished) {
-		log.Info("remote workload has completed")
-		return reconcile.Result{}, nil
+	if match := r.RemoteFinishedCondition(*wl); match != nil {
+		log.Info("workload finished - evicting from a remote cluster")
+		return reconcile.Result{}, r.evictJobByBindingPolicyDelete(ctx, wl)
 	}
-
-	if IsAdmitted(wl) {
-		// check the state of the request, eventually toggle the checks to false
-		// otherwise there is nothing to here
-		log.Info("workload admitted, sync checks")
-		return reconcile.Result{}, nil
+	if workload.HasQuotaReservation(wl) {
+		return r.handleJobWithQuota(ctx, wl)
+	} else {
+		// Check if workload was preempted. In such case, Kueue will take quota back and
+		// set a condition of type Preempted to true. Preempted job will be evicted and
+		// a new condition will be added to direct kueue to requeue this job and retry
+		// later, possibly using a different flavor
+		return r.handleJobWithNoQuota(ctx, wl)
 	}
+}
 
+/*
+only jobs with quota are allowed to run.
+*/
+func (r *WorkloadReconciler) handleJobWithQuota(ctx context.Context, wl *kueue.Workload) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
 	jobObject, mapping, err := r.getJobObject(ctx, wl.GetObjectMeta())
 	if err != nil {
 		log.Error(err, "Unable to fetch JobObject")
 		return ctrl.Result{}, err
 	}
 
-	log.Info("Found  jobObject ----" + jobObject.GetName())
+	log.V(4).Info("Found  jobObject ----" + jobObject.GetName())
 	if jobObject.GetLabels() == nil {
 		jobObject.SetLabels(map[string]string{})
 	}
-	// jobs with assigned cluster have already been scheduled to run
-	if _, exists := jobObject.GetLabels()[AssignedClusterLabel]; exists {
-		if workload.HasAllChecksReady(wl) {
+	_, jobAssignedToCluster := jobObject.GetLabels()[AssignedClusterLabel]
+
+	namespacedName := types.NamespacedName{
+		Name:      wl.Name,
+		Namespace: wl.Namespace,
+	}
+	if jobAssignedToCluster {
+
+		if !apimeta.IsStatusConditionTrue(wl.Status.Conditions, string(kueue.CheckStateReady)) {
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+
 				wl := &kueue.Workload{}
-				if err := r.Client.Get(ctx, req.NamespacedName, wl); err != nil {
+				if err := r.Client.Get(ctx, namespacedName, wl); err != nil {
 					log.Error(err, "Error when fetching Workload object ")
 					return err
 				}
-				log.Info("............ All Checks Ready")
+
+				log.Info("............ Got Quota Reservation", "Job", wl.Name, "Namespace", wl.Namespace)
 				newCondition := metav1.Condition{
 					Type:    string(kueue.CheckStateReady),
 					Status:  metav1.ConditionTrue,
@@ -136,90 +163,279 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				}
 				apimeta.SetStatusCondition(&wl.Status.Conditions, newCondition)
 				return r.Client.Status().Update(ctx, wl)
+
 			})
 			if err != nil {
 				return reconcile.Result{}, err
 			}
-
-			meta := &metav1.ObjectMeta{
-				Name:      jobObject.GetName(),
-				Namespace: jobObject.GetNamespace(),
-				Labels:    jobObject.GetLabels(),
-			}
-
-			if err = r.createBindingPolicy(ctx, meta); err != nil {
-				log.Error(err, "Error creating BindingPolicy object ")
-				return reconcile.Result{}, err
-			}
-			log.Info("New BindingPolicy created for object", "Name", meta.Name)
-
+			return ctrl.Result{RequeueAfter: time.Duration(1 * float64(time.Second))}, nil
 		} else {
-			relevantChecks, err := admissioncheck.FilterForController(ctx, r.Client, wl.Status.AdmissionChecks, ControllerName)
+
+			list := &ksv1alpha1.CombinedStatusList{}
+			labelSelector := labels.SelectorFromSet(labels.Set{
+				"status.kubestellar.io/name": jobObject.GetName(),
+			})
+
+			listOptions := client.ListOptions{
+				Namespace:     jobObject.GetNamespace(),
+				LabelSelector: labelSelector,
+			}
+
+			err = r.Client.List(ctx, list, &listOptions)
+
 			if err != nil {
-				return reconcile.Result{}, err
-			}
-
-			if len(relevantChecks) == 0 {
-				return reconcile.Result{}, nil
-			}
-			for check := range relevantChecks {
-				log.Info(">>>>>>>>>>>>>> relevant check", "", check)
-			}
-			acs := workload.FindAdmissionCheck(wl.Status.AdmissionChecks, relevantChecks[0])
-
-			if acs == nil {
-				log.Info(">>>>>>>>>>>>>> admissioncheck is null")
-			} else {
-				log.Info(">>>>>>>>>>>>>> ", "ACS", acs)
-				acs.State = kueue.CheckStateReady
-				acs.Message = fmt.Sprintf("The workload got reservation on %q", jobObject.GetLabels()[AssignedClusterLabel])
-				// update the transition time since is used to detect the lost worker state.
-				acs.LastTransitionTime = metav1.NewTime(time.Now())
-				wlPatch := workload.BaseSSAWorkload(wl)
-				workload.SetAdmissionCheckState(&wlPatch.Status.AdmissionChecks, *acs)
-				err := r.Client.Status().Patch(ctx, wlPatch, client.Apply, client.FieldOwner(ControllerName), client.ForceOwnership)
-				if err != nil {
-					return reconcile.Result{}, err
+				if apierrors.IsNotFound(err) {
+					log.Info("CombinedStatus resource not found, ignoring since it must have been deleted")
+					return ctrl.Result{}, nil
 				}
+				log.Error(err, "Failed to get CombinedStatus")
+				return ctrl.Result{}, err
+			}
+
+			// Perform reconciliation for CombinedStatus
+			log.Info("Reconciling CombinedStatus")
+			for _, cs := range list.Items {
+				r.status(ctx, &cs)
+			}
+
+			return ctrl.Result{}, nil
+
+		}
+	} else if !jobAssignedToCluster {
+		podSpecs, err := extractPodSpecList(wl)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		clusterMetricsList := &metricsv1alpha1.ClusterMetricsList{}
+		err = r.Client.List(ctx, clusterMetricsList, &client.ListOptions{})
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		fmt.Printf("---------------- workload.admitted: %v\n", workload.IsAdmitted(wl))
+
+		fmt.Printf("---------------- wl.Status.Admission %v\n", wl.Status.Admission)
+		var flavor string
+		for _, flavorName := range wl.Status.Admission.PodSetAssignments[0].Flavors {
+			flavor = string(flavorName)
+			break
+		}
+
+		fmt.Printf("---------------- workload flavor %s\n", flavor)
+
+		// podSpecs is a temporary structure which is needed by the scheduler.
+		// Below add a nodeSelector if not specified by user already.
+
+		for _, podSpec := range podSpecs {
+			// Kueue only injects nodeSelector to admitted workloads. Since scheduling occurs
+			// on the mgmt host where workloads are not running we need to inject nodeSelector
+			// before scheduler is called.
+			if podSpec.NodeSelector == nil {
+				podSpec.NodeSelector = map[string]string{"instance": string(flavor)}
 			}
 		}
-		return ctrl.Result{}, nil
+		requeAfter := time.Duration(10 * float64(time.Second))
+		cluster := r.Scheduler.SelectCluster(podSpecs, clusterMetricsList)
+		if cluster == "" {
+			log.Info("------------- Scheduler did not find suitable cluster for a Job to run")
+			return reconcile.Result{RequeueAfter: requeAfter}, nil
+		}
+		fmt.Printf("Selected cluster: %s\n", cluster)
+		// inject node selector into a job
+		if err := r.injectNodeSelector(jobObject, flavor); err != nil {
+			log.Info("-------------Unable to inject node selector into the job")
+			return ctrl.Result{}, err
+		}
+
+		if r.Recorder != nil {
+			r.Recorder.Event(jobObject, corev1.EventTypeNormal, "AssignedFlavor", "will run in node pool: "+flavor)
+		}
+
+		if r.Recorder != nil {
+			r.Recorder.Event(jobObject, corev1.EventTypeNormal, "AssignedCluster", "target cluster:"+cluster)
+		}
+		labels := jobObject.GetLabels()
+		labels[AssignedClusterLabel] = cluster
+		jobObject.SetLabels(labels)
+
+		_, err = r.DynamicClient.Resource(mapping.Resource).Namespace(wl.Namespace).Update(ctx, jobObject, metav1.UpdateOptions{})
+		if err != nil {
+			log.Error(err, "Error when Updating object ")
+			return ctrl.Result{}, err
+		}
+
+		meta := &metav1.ObjectMeta{
+			Name:      jobObject.GetName(),
+			Namespace: jobObject.GetNamespace(),
+			Labels:    jobObject.GetLabels(),
+		}
+
+		if err = r.createBindingPolicy(ctx, meta); err != nil {
+			log.Error(err, "Error creating BindingPolicy object ")
+			return ctrl.Result{}, err
+		}
+		log.Info("New BindingPolicy created for object", "Name", meta.Name)
 	}
-	podSpecs, err := extractPodSpecList(wl)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	clusterMetricsList := &metricsv1alpha1.ClusterMetricsList{}
-	err = r.Client.List(ctx, clusterMetricsList, &client.ListOptions{})
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	requeAfter := time.Duration(10 * float64(time.Second))
-
-	cluster := r.Scheduler.SelectCluster(podSpecs, clusterMetricsList)
-
-	if cluster == "" {
-		log.Info("------------- Scheduler did not find suitable cluster for a Job to run")
-		return reconcile.Result{RequeueAfter: requeAfter}, nil
-	}
-	fmt.Printf("Selected cluster: %s\n", cluster)
-	labels := jobObject.GetLabels()
-	labels[AssignedClusterLabel] = cluster
-
-	jobObject.SetLabels(labels)
-
-	_, err = r.DynamicClient.Resource(mapping.Resource).Namespace(wl.Namespace).Update(ctx, jobObject, metav1.UpdateOptions{})
-	if err != nil {
-		log.Error(err, "Error when Updating object ")
-		return ctrl.Result{}, err
-	}
-	log.Info("Updated  jobObject with target cluster label ----" + jobObject.GetName())
-
-	return ctrl.Result{RequeueAfter: time.Duration(1 * float64(time.Second))}, nil
-
+	return ctrl.Result{}, nil
 }
 
+func (r *WorkloadReconciler) handleJobWithNoQuota(ctx context.Context, wl *kueue.Workload) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+	log.Info("workload with no reservation")
+
+	if err := r.evictJobByBindingPolicyDelete(ctx, wl); err != nil {
+		log.Error(err, "Error when while evicting job ")
+		return reconcile.Result{}, err
+	}
+	if apimeta.IsStatusConditionTrue(wl.Status.Conditions, "Preempted") {
+		jobObject, mapping, err := r.getJobObject(ctx, wl.GetObjectMeta())
+		if err != nil {
+			log.Error(err, "Unable to fetch JobObject")
+			return ctrl.Result{}, err
+		}
+		// this workload was preempted but it still has a label assigned by
+		// this controller earlier which states which cluster to use. If label
+		// exists, delete it so that Kueue can retry it later on possibly different
+		// cluster
+		_, jobAssignedToCluster := jobObject.GetLabels()[AssignedClusterLabel]
+		if jobAssignedToCluster {
+			newLabels := make(map[string]string)
+			for key, value := range jobObject.GetLabels() {
+				if key != AssignedClusterLabel {
+					newLabels[key] = value
+				}
+			}
+			jobObject.SetLabels(newLabels)
+
+			// remove node selector if it was added by this controller
+			if err := r.removeNodeSelector(jobObject); err != nil {
+				log.Error(err, "Unable to remove nodeSelector from JobObject")
+				return ctrl.Result{}, err
+			}
+
+			_, err = r.DynamicClient.Resource(mapping.Resource).Namespace(wl.Namespace).Update(ctx, jobObject, metav1.UpdateOptions{})
+			if err != nil {
+				log.Error(err, "Error when Updating object ")
+				return ctrl.Result{}, err
+			}
+
+			log.Info("Reset jobObject due to Eviction -- ", "Job", jobObject.GetName())
+		}
+		log.Info("workload Preempted - Requeing")
+		return reconcile.Result{}, r.requeueDueToNoQuota(ctx, *wl)
+	}
+	return reconcile.Result{}, nil
+}
+
+func (r *WorkloadReconciler) injectNodeSelector(job *unstructured.Unstructured, flavor string) error {
+	spec, ok := job.Object["spec"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("job spec is not a map")
+	}
+	template, ok := spec["template"].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("job template is not a map")
+	}
+	template["spec"].(map[string]interface{})["nodeSelector"] = map[string]string{"instance": string(flavor)}
+
+	if job.GetAnnotations() == nil {
+		job.SetAnnotations(map[string]string{})
+	}
+	newAnnotations := job.GetAnnotations()
+	_, controllerAddedNodeSelector := job.GetAnnotations()[NodeSelectorController]
+	if !controllerAddedNodeSelector {
+		newAnnotations[NodeSelectorController] = NodeSelectorAddedBy
+		job.SetAnnotations(newAnnotations)
+		fmt.Printf("---------------- injectNodeSelector Annotation: NodeSelectorController\n")
+	}
+	return nil
+}
+
+/*
+	    Removes nodeSelector only if it was injected by this controller earlier. The removal is warranted
+		in case where a workload is preempted and subsequently retried. It initially is assigned to run
+		on some cluster but Kueue may decide to run it elsewhere after requeue. Initial nodeSelector
+		must thus be removed as part of a preemption.
+*/
+func (r *WorkloadReconciler) removeNodeSelector(job *unstructured.Unstructured) error {
+
+	newAnnotations := make(map[string]string)
+	_, controllerAddedNodeSelector := job.GetAnnotations()[NodeSelectorController]
+	if controllerAddedNodeSelector {
+		for key, annotation := range job.GetAnnotations() {
+			if key == NodeSelectorController {
+				spec, ok := job.Object["spec"].(map[string]interface{})
+				if !ok {
+					return fmt.Errorf("job spec is not a map")
+				}
+				template, ok := spec["template"]
+				if !ok {
+					return fmt.Errorf("job template is not a map")
+				}
+				templateSpec, ok := template.(map[string]interface{})["spec"].(map[string]interface{})
+				if ok {
+					delete(templateSpec, "nodeSelector")
+				}
+				// skip the annotation. This job will be requeued in Kueue and subject to new cluster assignment
+				continue
+			}
+			newAnnotations[key] = annotation
+		}
+		job.SetAnnotations(newAnnotations)
+	}
+
+	return nil
+}
+func (r *WorkloadReconciler) requeueDueToNoQuota(ctx context.Context, wl kueue.Workload) error {
+	relevantChecks, err := admissioncheck.FilterForController(ctx, r.Client, wl.Status.AdmissionChecks, ControllerName)
+	if err != nil {
+		return err
+	}
+
+	if len(relevantChecks) == 0 {
+		return nil
+	}
+
+	if acs := workload.FindAdmissionCheck(wl.Status.AdmissionChecks, relevantChecks[0]); acs != nil {
+		// add a condition to force Keueu to requeue a workload
+		acs.State = kueue.CheckStatePending
+		acs.Message = "Requeued"
+		acs.LastTransitionTime = metav1.NewTime(time.Now())
+		wlPatch := workload.BaseSSAWorkload(&wl)
+		workload.SetAdmissionCheckState(&wlPatch.Status.AdmissionChecks, *acs)
+		err = r.Client.Status().Patch(ctx, wlPatch, client.Apply, client.FieldOwner(ControllerName), client.ForceOwnership)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *WorkloadReconciler) testRunOnHost(ctx context.Context, wl kueue.Workload) error {
+	relevantChecks, err := admissioncheck.FilterForController(ctx, r.Client, wl.Status.AdmissionChecks, ControllerName)
+	if err != nil {
+		return err
+	}
+
+	if len(relevantChecks) == 0 {
+		return nil
+	}
+
+	if acs := workload.FindAdmissionCheck(wl.Status.AdmissionChecks, relevantChecks[0]); acs != nil {
+
+		acs.State = kueue.CheckStateReady
+		acs.Message = "Ready" // this setting allows workload to run on the host (test mode only)
+		acs.LastTransitionTime = metav1.NewTime(time.Now())
+		wlPatch := workload.BaseSSAWorkload(&wl)
+		workload.SetAdmissionCheckState(&wlPatch.Status.AdmissionChecks, *acs)
+		err = r.Client.Status().Patch(ctx, wlPatch, client.Apply, client.FieldOwner(ControllerName), client.ForceOwnership)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func (r *WorkloadReconciler) RemoteFinishedCondition(wl kueue.Workload) *metav1.Condition {
 	var bestMatch *metav1.Condition
 	if c := apimeta.FindStatusCondition(wl.Status.Conditions, kueue.WorkloadFinished); c != nil && c.Status == metav1.ConditionTrue && (bestMatch == nil || c.LastTransitionTime.Before(&bestMatch.LastTransitionTime)) {
@@ -237,48 +453,96 @@ func extractPodSpecList(workload *kueue.Workload) ([]*corev1.PodSpec, error) {
 }
 
 /*
-Evicts job from a WEC by deleting its BindingPolicy on the controlling host (HUB)
+Evicts job from a WEC by removing AssignedClusterLabel label from a job on the management cluster
 */
-func (r *WorkloadReconciler) evictJob(ctx context.Context, workload *kueue.Workload) error {
+func (r *WorkloadReconciler) evictJobByLabel(ctx context.Context, wl *kueue.Workload) error {
 	log := log.FromContext(ctx)
-	log.Info("evictJob() ----")
-	wlOwners := workload.GetObjectMeta().GetOwnerReferences()
+	log.V(4).Info("evictJob() ----")
+
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+
+		jobObject, mapping, err := r.getJobObject(ctx, wl.GetObjectMeta())
+		if err != nil {
+			log.Error(err, "Unable to fetch JobObject")
+			return err
+		}
+		cluster := ""
+		log.V(4).Info("Found  jobObject ----" + jobObject.GetName())
+		if jobObject.GetLabels() != nil {
+			newLabels := (map[string]string{})
+			for key, value := range jobObject.GetLabels() {
+				if key == AssignedClusterLabel {
+					continue
+				}
+				newLabels[key] = value
+			}
+			jobObject.SetLabels(newLabels)
+		}
+
+		if r.Recorder != nil {
+			r.Recorder.Event(jobObject.DeepCopy(), corev1.EventTypeNormal, "DeleteJobFromCluster", "Evict from "+cluster)
+		}
+		_, err = r.DynamicClient.Resource(mapping.Resource).Namespace(wl.Namespace).Update(ctx, jobObject, metav1.UpdateOptions{})
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+func (r *WorkloadReconciler) evictJobByBindingPolicyDelete(ctx context.Context, wl *kueue.Workload) error {
+	log := log.FromContext(ctx)
+	log.V(4).Info("evictJobByBindingPolicyDelete() ----")
+	wlOwners := wl.GetObjectMeta().GetOwnerReferences()
 
 	meta := &metav1.ObjectMeta{
 		Name:      wlOwners[0].Name,
-		Namespace: workload.Namespace,
+		Namespace: wl.Namespace,
 	}
 	namespacedName := types.NamespacedName{
-		Name: bindingPolicyName(meta),
+		Name:      bindingPolicyName(meta),
+		Namespace: wl.Namespace,
 	}
 	bindingPolicy := ksv1alpha1.BindingPolicy{}
 	if err := r.Client.Get(ctx, namespacedName, &bindingPolicy); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
+		log.Error(err, "evictJobByBindingPolicyDelete() ---- Error Getting BindingPolicy object ")
 		return err
 	}
 	if err := r.Client.Delete(ctx, &bindingPolicy); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
-		log.Error(err, "evictJob() ---- Error deleting BindingPolicy object ")
+		log.Error(err, "evictJobByBindingPolicyDelete() ---- Error deleting BindingPolicy object ")
 		return err
 	}
+
 	log.Info("Deleted BindingPolicy ----", "", bindingPolicyName(meta))
 	return nil
 }
-func WorkloadKey(req ctrl.Request) string {
-	return fmt.Sprintf("%s/%s", req.Namespace, req.Name)
-}
+func (r *WorkloadReconciler) addEvictedCondition(ctx context.Context, wl *kueue.Workload) error {
 
-// IsAdmitted returns true if the workload is admitted.
-func IsAdmitted(w *kueue.Workload) bool {
-	return apimeta.IsStatusConditionTrue(w.Status.Conditions, kueue.WorkloadAdmitted)
+	newCondition := metav1.Condition{
+		Type:               kueue.WorkloadEvicted,
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.Now(),
+		Reason:             kueue.WorkloadEvictedByPreemption,
+		Message:            "Preempted to accommodate a higher priority Workload",
+	}
+
+	apimeta.SetStatusCondition(&wl.Status.Conditions, newCondition)
+	return r.Client.Status().Update(ctx, wl)
+
 }
 func (r *WorkloadReconciler) getJobObject(ctx context.Context, meta metav1.Object) (*unstructured.Unstructured, *apimeta.RESTMapping, error) {
 	log := log.FromContext(ctx)
-	log.Info("getJobObject() ----")
 
 	wlOwners := meta.GetOwnerReferences()
 	log.Info("workload ", "", meta.GetName())
@@ -301,6 +565,15 @@ func (r *WorkloadReconciler) getJobObject(ctx context.Context, meta metav1.Objec
 
 	return jobObject.DeepCopy(), mapping, nil
 }
+
+func WorkloadKey(req ctrl.Request) string {
+	return fmt.Sprintf("%s/%s", req.Namespace, req.Name)
+}
+
+func IsAdmitted(w *kueue.Workload) bool {
+	return apimeta.IsStatusConditionTrue(w.Status.Conditions, kueue.WorkloadAdmitted)
+}
+
 func (*WorkloadReconciler) GetWorkloadKey(o runtime.Object) (types.NamespacedName, error) {
 	wl, isWl := o.(*kueue.Workload)
 	if !isWl {
@@ -308,50 +581,62 @@ func (*WorkloadReconciler) GetWorkloadKey(o runtime.Object) (types.NamespacedNam
 	}
 	return client.ObjectKeyFromObject(wl), nil
 }
+
 func (r *WorkloadReconciler) createBindingPolicy(ctx context.Context, meta metav1.Object) error {
 	bindingPolicy := ksv1alpha1.BindingPolicy{}
 	namespacedName := types.NamespacedName{
 		Name: bindingPolicyName(meta),
 	}
 	if err := r.Client.Get(ctx, namespacedName, &bindingPolicy); err != nil {
-		// create BindingPolicy object per appwrapper
 		if apierrors.IsNotFound(err) {
 
 			if meta.GetLabels() != nil && meta.GetLabels()[AssignedClusterLabel] != "" {
 
-				bindingPolicy = ksv1alpha1.BindingPolicy{
-					Spec: ksv1alpha1.BindingPolicySpec{
-						ClusterSelectors: []metav1.LabelSelector{
-							{
-								MatchLabels: map[string]string{
-									KsLabelLocationGroupKey: KsLabelLocationGroup,
-									KsLabelClusterNameKey:   meta.GetLabels()[AssignedClusterLabel],
-								},
+				clusterSelector := []metav1.LabelSelector{
+					{
+						MatchLabels: map[string]string{
+							KsLabelLocationGroupKey: KsLabelLocationGroup,
+							KsLabelClusterNameKey:   meta.GetLabels()[AssignedClusterLabel],
+						},
+					},
+				}
+				downSync := []ksv1alpha1.DownsyncPolicyClause{ //DownsyncObjectTestAndStatusCollection{
+					{
+						StatusCollection: &ksv1alpha1.StatusCollection{
+							StatusCollectors: []string{
+								"jobs-status-aggregator",
 							},
 						},
-						Downsync: []ksv1alpha1.DownsyncObjectTest{
-							{
-								Namespaces: []string{
-									meta.GetNamespace(),
-								},
-								ObjectNames: []string{
-									meta.GetName(),
-								},
-
-								ObjectSelectors: []metav1.LabelSelector{
-									{
-										MatchLabels: map[string]string{
-											AssignedClusterLabel: meta.GetLabels()[AssignedClusterLabel],
-										},
+						DownsyncObjectTest: ksv1alpha1.DownsyncObjectTest{
+							Namespaces: []string{
+								meta.GetNamespace(),
+							},
+							ObjectNames: []string{
+								meta.GetName(),
+							},
+							ObjectSelectors: []metav1.LabelSelector{
+								{
+									MatchLabels: map[string]string{
+										AssignedClusterLabel: meta.GetLabels()[AssignedClusterLabel],
 									},
 								},
 							},
 						},
+					},
+				}
+
+				bindingPolicy := ksv1alpha1.BindingPolicy{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: bindingPolicyName(meta),
+					},
+					Spec: ksv1alpha1.BindingPolicySpec{
+						ClusterSelectors: clusterSelector,
+						Downsync:         downSync,
 						// turn the flag on so that kubestellar updates status of the appwrapper
 						WantSingletonReportedState: true,
 					},
 				}
-				bindingPolicy.Name = bindingPolicyName(meta)
+
 				if err := r.Client.Create(ctx, &bindingPolicy); err != nil {
 					if apierrors.IsAlreadyExists(err) {
 						return nil
@@ -375,7 +660,183 @@ func bindingPolicyName(meta metav1.Object) string {
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *WorkloadReconciler) SetupWithManager(mgr ctrl.Manager) error {
+
+	ruh := &resourceUpdatesHandler{r: r}
+
 	return ctrl.NewControllerManagedBy(mgr).
+		WithOptions(controller.Options{MaxConcurrentReconciles: 1}).
 		For(&kueue.Workload{}).
+		Watches(&ksv1alpha1.CombinedStatus{}, ruh).
 		Complete(r)
+}
+
+func (r *WorkloadReconciler) CombinedStatusCreatefunc(ctx context.Context, e event.TypedCreateEvent[client.Object], rli workqueue.RateLimitingInterface) {
+	log := log.FromContext(ctx)
+	log.Info("CombinedStatusCreatefunc() ----")
+
+	cs := e.Object.(*ksv1alpha1.CombinedStatus)
+	r.status(ctx, cs)
+}
+func (r *WorkloadReconciler) CombinedStatusUpdatefunc(ctx context.Context, e event.TypedUpdateEvent[client.Object], rli workqueue.RateLimitingInterface) {
+	log := log.FromContext(ctx)
+	log.Info("CombinedStatusUpdatefunc() ----")
+	cs := e.ObjectNew.(*ksv1alpha1.CombinedStatus)
+	r.status(ctx, cs)
+}
+
+func (r *WorkloadReconciler) status(ctx context.Context, cs *ksv1alpha1.CombinedStatus) {
+	log := log.FromContext(ctx)
+
+	if len(cs.Results) > 0 {
+		if len(cs.Results[0].Rows) > 0 {
+			if len(cs.Results[0].Rows[0].Columns) > 0 {
+				if cs.Results[0].Rows[0].Columns[1].Object != nil {
+					object := cs.Results[0].Rows[0].Columns[1].Object
+					var statusObject batchv1.JobStatus
+					err := json.Unmarshal(object.Raw, &statusObject)
+					if err != nil {
+						log.Error(err, "Error when extracting status object from CombinedStatus ")
+					}
+					log.Info("Remote Job", "Active:", statusObject.Active, "Ready:", statusObject.Ready, "StartTime:", statusObject.StartTime)
+
+					jobName, found := cs.Labels["status.kubestellar.io/name"]
+					if !found {
+						log.Info("CombinedStatus status.kubestellar.io/name label is missing", "combinedstatus name", cs.Name)
+						return
+					}
+					jobNamespace, found := cs.Labels["status.kubestellar.io/namespace"]
+					if !found {
+						log.Info("CombinedStatus status.kubestellar.io/name label is missing", "combinedstatus name", cs.Name)
+						return
+					}
+					wl, err := r.fetchKueueWorkloadForJob(ctx, jobNamespace, jobName)
+					if err != nil {
+						log.Error(err, "Unable to fetch Workload object")
+						return
+					}
+					log.Info("Got Workload Object", "Name", wl.GetName())
+					if statusObject.Active > 0 && *statusObject.Ready < statusObject.Active {
+						log.Info("+++ Job pods are in Pending state")
+
+						if !apimeta.IsStatusConditionTrue(wl.Status.Conditions, string(kueue.CheckStatePending)) {
+
+							log.Info("............ Adding Pending condition", "Job", wl.Name, "Namespace", wl.Namespace)
+							newCondition := metav1.Condition{
+								Type:    string(kueue.CheckStatePending),
+								Status:  metav1.ConditionTrue,
+								Reason:  "JobStatus",
+								Message: fmt.Sprintf("Job pods Pending on Work Cluster %q", *cs.Results[0].Rows[0].Columns[0].String),
+							}
+							apimeta.SetStatusCondition(&wl.Status.Conditions, newCondition)
+
+							err := r.Client.Status().Update(ctx, wl)
+							if err != nil {
+								log.Error(err, "Unable to update Workload object")
+								return
+							}
+						} else if apimeta.IsStatusConditionTrue(wl.Status.Conditions, "ClusterAssigned") {
+							condition := apimeta.FindStatusCondition(wl.Status.Conditions, "ClusterAssigned")
+							elapsedTime := r.clock.Since(condition.LastTransitionTime.Time)
+							if elapsedTime.Minutes() > 1 {
+								log.Info("Exceeded time threshold while waiting for pods Ready on remote cluster")
+							}
+						}
+
+					} else if statusObject.Active > 0 && *statusObject.Ready == statusObject.Active {
+						log.Info("............ Got Quota Reservation", "Job", wl.Name, "Namespace", wl.Namespace)
+						if !apimeta.IsStatusConditionTrue(wl.Status.Conditions, string(kueue.CheckStatePending)) {
+							newCondition := metav1.Condition{
+								Type:    string(kueue.CheckStateReady),
+								Status:  metav1.ConditionTrue,
+								Reason:  "JobStatus",
+								Message: fmt.Sprintf("Job Pods are Ready on the Work Cluster"),
+							}
+							apimeta.SetStatusCondition(&wl.Status.Conditions, newCondition)
+							err := r.Client.Status().Update(ctx, wl)
+							if err != nil {
+								log.Error(err, "Unable to update Workload object")
+								return
+							}
+						}
+
+					}
+				} else {
+					log.Info("status() - CombinedStatus.Results[0].Rows[0].Columns[0].Object is missing")
+				}
+			} else {
+				log.Info("status() - CombinedStatus.Results[0].Rows[0].Columns is missing")
+			}
+		} else {
+			log.Info("status() - CombinedStatus.Results[0].Rows is missing")
+		}
+	} else {
+		log.Info("status() - CombinedStatus.Results is missing")
+	}
+
+}
+
+type resourceUpdatesHandler struct {
+	r *WorkloadReconciler
+}
+
+func (h *resourceUpdatesHandler) Generic(_ context.Context, _ event.GenericEvent, _ workqueue.RateLimitingInterface) {
+}
+
+func (h *resourceUpdatesHandler) Create(ctx context.Context, e event.CreateEvent, q workqueue.RateLimitingInterface) {
+	log := log.FromContext(ctx)
+	log.Info("Create event")
+	h.handle(ctx, e.Object, q)
+
+}
+
+func (h *resourceUpdatesHandler) Update(ctx context.Context, e event.UpdateEvent, q workqueue.RateLimitingInterface) {
+	log := log.FromContext(ctx)
+	log.Info("Update event")
+	h.handle(ctx, e.ObjectNew, q)
+}
+
+func (h *resourceUpdatesHandler) Delete(ctx context.Context, e event.DeleteEvent, q workqueue.RateLimitingInterface) {
+	log := log.FromContext(ctx)
+	log.Info("Delete event")
+	h.handle(ctx, e.Object, q)
+}
+func (h *resourceUpdatesHandler) handle(ctx context.Context, obj client.Object, q workqueue.RateLimitingInterface) {
+	cs := obj.(*ksv1alpha1.CombinedStatus)
+	log := log.FromContext(ctx)
+	namespacedName := types.NamespacedName{
+		Name:      cs.Name,
+		Namespace: cs.Namespace,
+	}
+
+	if err := h.r.Client.Get(ctx, namespacedName, cs); err != nil {
+		log.Error(err, "Error when fetching CombinedStatus object ")
+		return
+	}
+	log.Info("handle() ", "CombinedStatus Fetch", "Success")
+	h.r.status(ctx, cs)
+	req := reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      cs.Name,
+			Namespace: cs.Namespace,
+		},
+	}
+	q.Add(req)
+}
+
+// Inside your controller's Reconcile function or a relevant handler
+func (r *WorkloadReconciler) fetchKueueWorkloadForJob(ctx context.Context /*, dynamicClient dynamic.Interface*/, jobNamespace, jobName string) (*kueue.Workload, error) {
+	log := log.FromContext(ctx)
+
+	workloads := &kueue.WorkloadList{}
+	err := r.Client.List(ctx, workloads, &client.ListOptions{})
+	if err != nil {
+		log.Error(err, "Unable to list Workload objects")
+		return nil, err
+	}
+	for _, workload := range workloads.Items {
+		if workload.OwnerReferences[0].Name == jobName && workload.Namespace == jobNamespace {
+			return &workload, nil
+		}
+	}
+	return nil, fmt.Errorf("no Kueue Workload found with name=%s in namespace %s", jobName, jobNamespace)
 }

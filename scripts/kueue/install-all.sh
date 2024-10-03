@@ -19,6 +19,5 @@ set -e # exit on error
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 
-${SCRIPT_DIR}/../common/install-ks-k3d.sh
-${SCRIPT_DIR}/install-kueue.sh
-
+${SCRIPT_DIR}/../common/install-k3d-ks.sh
+${SCRIPT_DIR}/install-kueue-ks.sh

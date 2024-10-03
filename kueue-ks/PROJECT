@@ -19,4 +19,9 @@ resources:
   group: kueue.x-k8s.io
   kind: AdmissionCheck
   version: v1beta1
+- controller: true
+  domain: galaxy.kubestellar.io
+  group: cluster.open-cluster-management.io
+  kind: ManagedCluster
+  version: v1
 version: "3"
