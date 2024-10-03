@@ -71,49 +71,49 @@ kubectl --context ${CONTEXT} -n ${NAMESPACE} patch configmap "$CONFIGMAP_NAME" -
 
 ##################################################################################################
 
-# : pre-load images that experienced docker registry rate limit when loading multiple times in kind
+: pre-load images that experienced docker registry rate limit when loading multiple times in kind
 
-# images=(alpine:3.7 python:alpine3.6 minio/minio:RELEASE.2022-11-17T23-20-09Z python:3.7)
-# all_clusters=("${clusters[@]}")
-# all_clusters+=("kubeflex")
-# for image in "${images[@]}"; do
-#   docker pull ${image}
-#   for cluster in "${all_clusters[@]}"; do
-#      kind load docker-image --name ${cluster} ${image}
-#   done
-# done
+images=(alpine:3.7 python:alpine3.6 minio/minio:RELEASE.2022-11-17T23-20-09Z python:3.7)
+all_clusters=("${clusters[@]}")
+all_clusters+=("kubeflex")
+for image in "${images[@]}"; do
+  docker pull ${image}
+  for cluster in "${all_clusters[@]}"; do
+     kind load docker-image --name ${cluster} ${image}
+  done
+done
 
-# : install kfp on kubeflex and add services and ingresses
+: install kfp on kubeflex and add services and ingresses
 
-# contexts=(kind-kubeflex);
-# for context in "${contexts[@]}"; do
-#   kubectl --context ${context} apply -k "github.com/kubeflow/pipelines/manifests/kustomize/cluster-scoped-resources?ref=$PIPELINE_VERSION"
-#   kubectl --context ${context} wait --for condition=established --timeout=60s crd/applications.app.k8s.io
-#   kubectl --context ${context} apply -k "github.com/kubeflow/pipelines/manifests/kustomize/env/platform-agnostic-emissary?ref=$PIPELINE_VERSION"
-#   kubectl --context ${context} -n kubeflow apply -f ${SCRIPT_DIR}/templates/service.yaml
-#   kubectl --context ${context} -n kubeflow apply -f ${SCRIPT_DIR}/templates/ingress.yaml
-#   kubectl --context ${context} -n kubeflow set env deployment ml-pipeline-ui ARGO_ARCHIVE_LOGS="true"
-#   # replace default UI image "gcr.io/ml-pipeline/frontend:2.2.0" with patched image from https://github.com/pdettori/pipelines/tree/s3-pod-logs-fix
-#   kubectl --context ${context} -n kubeflow set image deployment/ml-pipeline-ui ml-pipeline-ui=quay.io/pdettori/kfp-frontend:2.2.0-fix
-#   updateArgoConfig ${context}
-# done
+contexts=(kind-kubeflex);
+for context in "${contexts[@]}"; do
+  kubectl --context ${context} apply -k "github.com/kubeflow/pipelines/manifests/kustomize/cluster-scoped-resources?ref=$PIPELINE_VERSION"
+  kubectl --context ${context} wait --for condition=established --timeout=60s crd/applications.app.k8s.io
+  kubectl --context ${context} apply -k "github.com/kubeflow/pipelines/manifests/kustomize/env/platform-agnostic-emissary?ref=$PIPELINE_VERSION"
+  kubectl --context ${context} -n kubeflow apply -f ${SCRIPT_DIR}/templates/service.yaml
+  kubectl --context ${context} -n kubeflow apply -f ${SCRIPT_DIR}/templates/ingress.yaml
+  kubectl --context ${context} -n kubeflow set env deployment ml-pipeline-ui ARGO_ARCHIVE_LOGS="true"
+  # replace default UI image "gcr.io/ml-pipeline/frontend:2.2.0" with patched image from https://github.com/pdettori/pipelines/tree/s3-pod-logs-fix
+  kubectl --context ${context} -n kubeflow set image deployment/ml-pipeline-ui ml-pipeline-ui=quay.io/pdettori/kfp-frontend:2.2.0-fix
+  updateArgoConfig ${context}
+done
 
-# : prepare minio secret for WECs
+: prepare minio secret for WECs
 
-# kubectl --context kind-kubeflex -n kubeflow get secret mlpipeline-minio-artifact -o yaml > ${WORK_DIR}/mlpipeline-minio-artifact.yaml
-# sed -i.bak -e '/creationTimestamp:/d' \
-#            -e '/resourceVersion:/d' \
-#            -e '/uid:/d' \
-#            -e '/selfLink:/d' \
-#            -e '/kubectl.kubernetes.io\/last-applied-configuration:/{N;d;}' \
-#            ${WORK_DIR}/mlpipeline-minio-artifact.yaml
+kubectl --context kind-kubeflex -n kubeflow get secret mlpipeline-minio-artifact -o yaml > ${WORK_DIR}/mlpipeline-minio-artifact.yaml
+sed -i.bak -e '/creationTimestamp:/d' \
+           -e '/resourceVersion:/d' \
+           -e '/uid:/d' \
+           -e '/selfLink:/d' \
+           -e '/kubectl.kubernetes.io\/last-applied-configuration:/{N;d;}' \
+           ${WORK_DIR}/mlpipeline-minio-artifact.yaml
 
-# : install kfp with kustomization on execution clusters
+: install kfp with kustomization on execution clusters
 
-# minioNPort=$(kubectl --context kind-kubeflex -n kubeflow get service minio-nodeport -o jsonpath='{.spec.ports[0].nodePort}')
-# mysqlNPort=$(kubectl --context kind-kubeflex -n kubeflow get service mysql-nodeport -o jsonpath='{.spec.ports[0].nodePort}')
-# echo "minioNPort=${minioNPort} mysqlNPort=${mysqlNPort}"
-# sed "s/NODE_PORT/${minioNPort}/g" ${SCRIPT_DIR}/templates/minio-proxy-template.yaml > ${WORK_DIR}/minio-proxy.yaml
+minioNPort=$(kubectl --context kind-kubeflex -n kubeflow get service minio-nodeport -o jsonpath='{.spec.ports[0].nodePort}')
+mysqlNPort=$(kubectl --context kind-kubeflex -n kubeflow get service mysql-nodeport -o jsonpath='{.spec.ports[0].nodePort}')
+echo "minioNPort=${minioNPort} mysqlNPort=${mysqlNPort}"
+sed "s/NODE_PORT/${minioNPort}/g" ${SCRIPT_DIR}/templates/minio-proxy-template.yaml > ${WORK_DIR}/minio-proxy.yaml
 
 cat > ${SCRIPT_DIR}/kustomize/base/patch-pipeline-install-config.yaml <<EOL
 apiVersion: v1
@@ -127,41 +127,41 @@ data:
   mysqlPort: "${mysqlNPort}"
 EOL
 
-# # use kustomization to avoid installing minio and mysql
-# for cluster in "${clusters[@]}"; do
-#   kubectl --context ${cluster} apply -k "github.com/kubeflow/pipelines/manifests/kustomize/cluster-scoped-resources?ref=$PIPELINE_VERSION"
-#   kubectl --context ${cluster} wait --for condition=established --timeout=60s crd/applications.app.k8s.io
-#   kubectl --context ${cluster} apply -k ${SCRIPT_DIR}/kustomize/base
-#   updateArgoConfig ${cluster}
+# use kustomization to avoid installing minio and mysql
+for cluster in "${clusters[@]}"; do
+  kubectl --context ${cluster} apply -k "github.com/kubeflow/pipelines/manifests/kustomize/cluster-scoped-resources?ref=$PIPELINE_VERSION"
+  kubectl --context ${cluster} wait --for condition=established --timeout=60s crd/applications.app.k8s.io
+  kubectl --context ${cluster} apply -k ${SCRIPT_DIR}/kustomize/base
+  updateArgoConfig ${cluster}
 
-#   : apply minio secret
-#   kubectl --context ${cluster} apply -f ${WORK_DIR}/mlpipeline-minio-artifact.yaml
+  : apply minio secret
+  kubectl --context ${cluster} apply -f ${WORK_DIR}/mlpipeline-minio-artifact.yaml
 
-#   : update ui image
-#   # replace default UI image "gcr.io/ml-pipeline/frontend:2.2.0" with patched image from https://github.com/pdettori/pipelines/tree/s3-pod-logs-fix
-#   kubectl --context ${cluster} -n kubeflow set image deployment/ml-pipeline-ui ml-pipeline-ui=quay.io/pdettori/kfp-frontend:2.2.0-fix
+  : update ui image
+  # replace default UI image "gcr.io/ml-pipeline/frontend:2.2.0" with patched image from https://github.com/pdettori/pipelines/tree/s3-pod-logs-fix
+  kubectl --context ${cluster} -n kubeflow set image deployment/ml-pipeline-ui ml-pipeline-ui=quay.io/pdettori/kfp-frontend:2.2.0-fix
 
-#   : setup reverse proxy for minio so that minio-service proxies to the common s3 from kubeflex-control-plane
-#   kubectl --context ${cluster} apply -f ${WORK_DIR}/minio-proxy.yaml
+  : setup reverse proxy for minio so that minio-service proxies to the common s3 from kubeflex-control-plane
+  kubectl --context ${cluster} apply -f ${WORK_DIR}/minio-proxy.yaml
 
-#   : give permissions to klusterlets to manage workflows
-#   kubectl --context ${cluster} apply -f ${SCRIPT_DIR}/templates/argo-rbac.yaml
-# done
-# : cleanup dynamic patch
-# rm ${SCRIPT_DIR}/kustomize/base/patch-pipeline-install-config.yaml
+  : give permissions to klusterlets to manage workflows
+  kubectl --context ${cluster} apply -f ${SCRIPT_DIR}/templates/argo-rbac.yaml
+done
+: cleanup dynamic patch
+rm ${SCRIPT_DIR}/kustomize/base/patch-pipeline-install-config.yaml
 
-# : install mutating admission webhook for workflows on kind-kubeflex
+: install mutating admission webhook for workflows on kind-kubeflex
 
-# helm --kube-context ${core} upgrade --install suspend-webhook \
-#     oci://ghcr.io/kubestellar/galaxy/suspend-webhook-chart \
-#     --version ${SUSPEND_WEBHOOK_VERSION} \
-#     --create-namespace --namespace ksi-system \
-#     --set image.repository=ghcr.io/kubestellar/galaxy/suspend-webhook \
-#     --set image.tag=${SUSPEND_WEBHOOK_VERSION}
+helm --kube-context ${core} upgrade --install suspend-webhook \
+    oci://ghcr.io/kubestellar/galaxy/suspend-webhook-chart \
+    --version ${SUSPEND_WEBHOOK_VERSION} \
+    --create-namespace --namespace ksi-system \
+    --set image.repository=ghcr.io/kubestellar/galaxy/suspend-webhook \
+    --set image.tag=${SUSPEND_WEBHOOK_VERSION}
 
-# : wait for admission webhook to be up
+: wait for admission webhook to be up
 
-# wait-for-deployment ${core} ksi-system suspend-webhook-suspend-webhook-chart
+wait-for-deployment ${core} ksi-system suspend-webhook-suspend-webhook-chart
 
 : install shadow pods controller
 
