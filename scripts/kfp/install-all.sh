@@ -24,5 +24,5 @@ ${SCRIPT_DIR}/../common/install-loki.sh
 ${SCRIPT_DIR}/install-kfp.sh
 ${SCRIPT_DIR}/../common/install-mcs.sh
 
-echo "you can access the KFP console at http://kfp.localtest.me:9080"
-echo "you can access the minio console at http://minio.localtest.me:9080 minio/minio123"
+echo "you can access the KFP console at https://kfp.localtest.me:9443"
+echo "you can access the minio console at https://minio.localtest.me:9443 minio/minio123"
