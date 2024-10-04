@@ -3,7 +3,7 @@ import warnings
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore")
-    client = Client(host='http://kfp.localtest.me:9080')
+    client = Client(host='https://kfp.localtest.me:9443',verify_ssl=False)
 
     # List all pipelines
     response = client.list_pipelines(page_size=100)

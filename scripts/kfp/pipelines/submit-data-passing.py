@@ -5,7 +5,7 @@ import warnings
 
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore")
-    client = Client(host='http://kfp.localtest.me:9080')
+    client = Client(host='https://kfp.localtest.me:9443',verify_ssl=False)
 
 def create_runs(number_of_runs):
     # Initialization and run creation logic here.
