@@ -610,7 +610,7 @@ spec:
         - --health-probe-bind-address=:8085
         - --metrics-bind-address=127.0.0.1:8080
         - --leader-elect
-        image: ko.local/kueue-ks:e559205
+        image: {{.Values.image}}
         livenessProbe:
           httpGet:
             path: /healthz

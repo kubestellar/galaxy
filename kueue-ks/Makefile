@@ -5,6 +5,11 @@ IMAGE_TAG ?= $(shell git rev-parse --short HEAD)
 #IMAGE_TAG ?= 0.0.1
 CMD_NAME ?= kueue-ks
 IMG ?= ${KO_DOCKER_REPO}/${CMD_NAME}:${IMAGE_TAG}
+HELM_IMG := --set image=${IMG}
+HELM_OPTS := ${HELM_OPTS} ${HELM_IMG}
+@echo ${HELM_OPTS}
+
+#FOO ?= " --set image=${IMG}"
 # Image URL to use all building/pushing image targets
 #IMG ?= controller:latest
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
@@ -142,7 +147,7 @@ k3d-load-image:
 
 .PHONY: k3d-install-local-chart
 k3d-install-local-chart: k3d-load-image
-	if [ ! -n "$(CONTEXT)" ] ; then helm  upgrade --install --create-namespace -n kueue-ks-system kueue-ks ../charts/kueue-ks ${HELM_OPTS} ; else helm  --kube-context ${CONTEXT} upgrade --install --create-namespace -n kueue-ks-system kueue-ks ../charts/kueue-ks ${HELM_OPTS} ; fi
+	if [ ! -n "$(CONTEXT)" ] ; then helm  upgrade --install --create-namespace -n kueue-ks-system kueue-ks ../charts/kueue-ks ${HELM_OPTS} ; else helm  --kube-context ${CONTEXT} upgrade --install --create-namespace -n kueue-ks-system kueue-ks ../charts/kueue-ks ${HELM_OPTS}; fi
 
 ##@ Build Dependencies
 
