@@ -203,6 +203,7 @@ func main() {
 
 	rm := restmapper.NewDiscoveryRESTMapper(groupResources)
 	wr := &controller.WorkloadReconciler{
+
 		Client:                 kflexMgr.GetClient(),
 		KueueClient:            kClient,
 		DynamicClient:          dynClient,

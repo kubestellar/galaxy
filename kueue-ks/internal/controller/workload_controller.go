@@ -336,7 +336,8 @@ func (r *WorkloadReconciler) injectNodeSelector(job *unstructured.Unstructured, 
 	if !ok {
 		return fmt.Errorf("job template is not a map")
 	}
-	template["spec"].(map[string]interface{})["nodeSelector"] = map[string]string{"instance": string(flavor)}
+	//template["spec"].(map[string]interface{})["nodeSelector"] = map[string]string{"instance": string(flavor)}
+	template["spec"].(map[string]interface{})["nodeSelector"] = map[string]string{"instance": "spot"}
 
 	if job.GetAnnotations() == nil {
 		job.SetAnnotations(map[string]string{})
