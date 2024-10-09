@@ -117,7 +117,7 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	if match := r.RemoteFinishedCondition(*wl); match != nil {
-		log.Info("workload finished - evicting from a remote cluster")
+		log.Info("workload finished - evicting from a remote cluster", "CleanupWecOnCompletion", r.CleanupWecOnCompletion)
 		if r.CleanupWecOnCompletion {
 			return reconcile.Result{}, r.evictJobByBindingPolicyDelete(ctx, wl)
 		}
