@@ -64,14 +64,15 @@ import (
 
 // WorkloadReconciler reconciles a Workload object
 type WorkloadReconciler struct {
-	Client        client.Client
-	RestClient    rest.Interface
-	RestMapper    meta.RESTMapper
-	KueueClient   *kueueClient.Clientset
-	DynamicClient *dynamic.DynamicClient
-	Scheduler     scheduler.MultiClusterScheduler
-	Recorder      record.EventRecorder
-	clock         clock.Clock
+	Client                 client.Client
+	RestClient             rest.Interface
+	RestMapper             meta.RESTMapper
+	KueueClient            *kueueClient.Clientset
+	DynamicClient          *dynamic.DynamicClient
+	Scheduler              scheduler.MultiClusterScheduler
+	Recorder               record.EventRecorder
+	clock                  clock.Clock
+	CleanupWecOnCompletion bool
 }
 
 const (
@@ -117,7 +118,9 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	if match := r.RemoteFinishedCondition(*wl); match != nil {
 		log.Info("workload finished - evicting from a remote cluster")
-		return reconcile.Result{}, r.evictJobByBindingPolicyDelete(ctx, wl)
+		if r.CleanupWecOnCompletion {
+			return reconcile.Result{}, r.evictJobByBindingPolicyDelete(ctx, wl)
+		}
 	}
 
 	if workload.HasQuotaReservation(wl) {
@@ -333,8 +336,7 @@ func (r *WorkloadReconciler) injectNodeSelector(job *unstructured.Unstructured, 
 	if !ok {
 		return fmt.Errorf("job template is not a map")
 	}
-	//template["spec"].(map[string]interface{})["nodeSelector"] = map[string]string{"instance": string(flavor)}
-	template["spec"].(map[string]interface{})["nodeSelector"] = map[string]string{"instance": "spot"}
+	template["spec"].(map[string]interface{})["nodeSelector"] = map[string]string{"instance": string(flavor)}
 
 	if job.GetAnnotations() == nil {
 		job.SetAnnotations(map[string]string{})

@@ -92,6 +92,7 @@ func main() {
 	var probeAddr string
 	var enableHTTP2 bool
 	var clusterQueue string
+	var deleteOnCompletion bool
 	var defaultResourceFlavorName string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8085", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8086", "The address the probe endpoint binds to.")
@@ -103,6 +104,7 @@ func main() {
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.StringVar(&clusterQueue, "clusterQueue-name", "cluster-queue-ks", "cluster queue name")
+	flag.BoolVar(&deleteOnCompletion, "deleteOnCompletion", false, "If set, workload will be auto cleaned up from the WEC")
 	flag.StringVar(&defaultResourceFlavorName, "defaultResourceFlavorName", "default-flavor", "default flavor name")
 	opts := zap.Options{
 		Development: true,
@@ -201,12 +203,13 @@ func main() {
 
 	rm := restmapper.NewDiscoveryRESTMapper(groupResources)
 	wr := &controller.WorkloadReconciler{
-		Client:        kflexMgr.GetClient(),
-		KueueClient:   kClient,
-		DynamicClient: dynClient,
-		RestMapper:    rm,
-		Scheduler:     scheduler.NewDefaultScheduler(),
-		Recorder:      kflexMgr.GetEventRecorderFor("job-recorder"),
+		Client:                 kflexMgr.GetClient(),
+		KueueClient:            kClient,
+		DynamicClient:          dynClient,
+		RestMapper:             rm,
+		Scheduler:              scheduler.NewDefaultScheduler(),
+		Recorder:               kflexMgr.GetEventRecorderFor("job-recorder"),
+		CleanupWecOnCompletion: deleteOnCompletion,
 	}
 	if err = wr.SetupWithManager(kflexMgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Workload")
