@@ -83,15 +83,11 @@ test: manifests generate fmt vet envtest ## Run tests.
 
 .PHONY: build
 build: generate fmt vet ## Build manager binary.
-	go build -o bin/manager cmd/kueue-ks/main.go
+	go build -o bin/manager cmd/${CMD_NAME}/main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/kueue-ks/main.go
-
-.PHONY: run-clusters
-run-clusters: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/clusters/main.go
+	go run ./cmd/${CMD_NAME}/main.go
 
 
 .PHONY: docker-build
@@ -139,6 +135,7 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 
 .PHONY: ko-local-build
 ko-local-build:
+#	KO_DOCKER_REPO=${KO_DOCKER_REPO} ko build -B ./cmd/${CMD_NAME} -t ${IMAGE_TAG} --platform linux/${ARCH}
 	KO_DOCKER_REPO=${KO_DOCKER_REPO} ko build -B ./cmd/${CMD_NAME} -t ${IMAGE_TAG} --platform linux/${ARCH}
 
 .PHONY: k3d-load-image

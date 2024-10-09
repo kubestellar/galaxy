@@ -610,6 +610,7 @@ spec:
         - --health-probe-bind-address=:8085
         - --metrics-bind-address=127.0.0.1:8080
         - --leader-elect
+        - --deleteOnCompletion={{.Values.deleteOnCompletion}}
         image: {{.Values.image}}
         livenessProbe:
           httpGet:

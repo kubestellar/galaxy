@@ -1,3 +1,4 @@
+deleteOnCompletion: false
 
 service:
   type: ClusterIP

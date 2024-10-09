@@ -22,7 +22,6 @@ import (
 	"flag"
 	"fmt"
 	metricsv1alpha1 "kubestellar/galaxy/clustermetrics/api/v1alpha1"
-	"kubestellar/galaxy/kueue-ks/internal/controller"
 	scheduler "kubestellar/galaxy/mc-scheduling/pkg/scheduler"
 	"os"
 	"time"
@@ -41,7 +40,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/utils/clock"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
@@ -54,6 +52,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	kueue "sigs.k8s.io/kueue/apis/kueue/v1beta1"
 	kueueClient "sigs.k8s.io/kueue/client-go/clientset/versioned"
+
+	"kubestellar/galaxy/kueue-ks/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -92,7 +92,6 @@ func main() {
 	var probeAddr string
 	var enableHTTP2 bool
 	var clusterQueue string
-	var deleteOnCompletion bool
 	var defaultResourceFlavorName string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8085", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8086", "The address the probe endpoint binds to.")
@@ -104,7 +103,6 @@ func main() {
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.StringVar(&clusterQueue, "clusterQueue-name", "cluster-queue-ks", "cluster queue name")
-	flag.BoolVar(&deleteOnCompletion, "deleteOnCompletion", false, "If set, workload will be auto cleaned up from the WEC")
 	flag.StringVar(&defaultResourceFlavorName, "defaultResourceFlavorName", "default-flavor", "default flavor name")
 	opts := zap.Options{
 		Development: true,
@@ -202,42 +200,26 @@ func main() {
 	}
 
 	rm := restmapper.NewDiscoveryRESTMapper(groupResources)
-	wr := &controller.WorkloadReconciler{
-		Client:                 kflexMgr.GetClient(),
-		KueueClient:            kClient,
-		DynamicClient:          dynClient,
-		RestMapper:             rm,
-		Scheduler:              scheduler.NewDefaultScheduler(),
-		Recorder:               kflexMgr.GetEventRecorderFor("job-recorder"),
-		CleanupWecOnCompletion: deleteOnCompletion,
-	}
-	if err = wr.SetupWithManager(kflexMgr); err != nil {
+
+	if err = (&controller.WorkloadReconciler{
+		Client:        kflexMgr.GetClient(),
+		KueueClient:   kClient,
+		DynamicClient: dynClient,
+		RestMapper:    rm,
+		Scheduler:     scheduler.NewDefaultScheduler(),
+		Recorder:      kflexMgr.GetEventRecorderFor("job-recorder"),
+	}).SetupWithManager(kflexMgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Workload")
 		os.Exit(1)
 	}
-	/*
-		if err = (&controller.WorkloadReconciler{
-			Client:        kflexMgr.GetClient(),
-			KueueClient:   kClient,
-			DynamicClient: dynClient,
-			RestMapper:    rm,
-			Scheduler:     scheduler.NewDefaultScheduler(),
-			Recorder:      kflexMgr.GetEventRecorderFor("job-recorder"),
-		}).SetupWithManager(kflexMgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "Workload")
-			os.Exit(1)
-		}
-	*/
+
 	if err = (&controller.CombinedStatusReconciler{
-		Client:             kflexMgr.GetClient(),
-		Scheme:             kflexMgr.GetScheme(),
-		Clock:              clock.RealClock{},
-		WorkloadReconciler: wr,
+		Client: kflexMgr.GetClient(),
+		Scheme: kflexMgr.GetScheme(),
 	}).SetupWithManager(kflexMgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "CombinedStatus")
 		os.Exit(1)
 	}
-
 	//+kubebuilder:scaffold:builder
 
 	go func() {
