@@ -35,6 +35,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	//clientgo "k8s.io/client-go"
 
@@ -49,6 +50,7 @@ import (
 
 	//	"k8s.io/client-go/util/workqueue"
 	"k8s.io/utils/clock"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -71,7 +73,7 @@ type WorkloadReconciler struct {
 	DynamicClient          *dynamic.DynamicClient
 	Scheduler              scheduler.MultiClusterScheduler
 	Recorder               record.EventRecorder
-	clock                  clock.Clock
+	Clock                  clock.Clock
 	CleanupWecOnCompletion bool
 }
 
@@ -98,7 +100,7 @@ func NewWorkloadReconciler(c client.Client, kueueClient *kueueClient.Clientset, 
 		KueueClient:   kueueClient,
 		Scheduler:     scheduler.NewDefaultScheduler(),
 		Recorder:      record,
-		clock:         clock.RealClock{},
+		Clock:         clock.RealClock{},
 	}
 }
 
@@ -116,6 +118,8 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
 
+	fmt.Printf("---------------- wl.Status %v\n", wl.Status)
+
 	if match := r.RemoteFinishedCondition(*wl); match != nil {
 		log.Info("workload finished - evicting from a remote cluster", "CleanupWecOnCompletion", r.CleanupWecOnCompletion)
 		if r.CleanupWecOnCompletion {
@@ -130,6 +134,7 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			if err != nil {
 				return ctrl.Result{}, err
 			}
+			return reconcile.Result{}, nil
 		}
 		return r.handleJobWithQuota(ctx, wl)
 	} else {
@@ -149,7 +154,7 @@ func (r *WorkloadReconciler) handleJobWithQuota(ctx context.Context, wl *kueue.W
 	jobObject, mapping, err := r.getJobObject(ctx, wl.GetObjectMeta())
 	if err != nil {
 		log.Error(err, "Unable to fetch JobObject")
-		return ctrl.Result{}, err
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	log.Info("Found  jobObject ----" + jobObject.GetName())
@@ -211,6 +216,7 @@ func (r *WorkloadReconciler) handleJobWithQuota(ctx context.Context, wl *kueue.W
 		fmt.Printf("---------------- workload.admitted: %v\n", workload.IsAdmitted(wl))
 
 		fmt.Printf("---------------- wl.Status.Admission %v\n", wl.Status.Admission)
+
 		if wl.Status.Admission == nil {
 			log.Info("------------- Kueue has not added admission details - retrying ...")
 			return reconcile.Result{RequeueAfter: requeAfter}, nil
@@ -414,7 +420,10 @@ func (r *WorkloadReconciler) jobPendingPodReadyTimeout(ctx context.Context, jobN
 func (r *WorkloadReconciler) ReclaimQuota(ctx context.Context, wl *kueue.Workload, cl client.Client, reason, message string) error {
 	log := log.FromContext(ctx)
 	log.Info("ReclaimQuota ----")
-
+	if apimeta.IsStatusConditionTrue(wl.Status.Conditions, kueue.WorkloadEvicted) {
+		// the workload has already been evicted by the PodsReadyTimeout
+		return nil
+	}
 	jobObject, mapping, err := r.getJobObject(ctx, wl.GetObjectMeta())
 	if err != nil {
 		log.Error(err, "Unable to fetch JobObject")
@@ -433,13 +442,13 @@ func (r *WorkloadReconciler) ReclaimQuota(ctx context.Context, wl *kueue.Workloa
 			}
 		}
 		jobObject.SetLabels(newLabels)
-		/*
-			// remove node selector if it was added by this controller
-			if err := removeNodeSelector(jobObject); err != nil {
-				log.Error(err, "Unable to remove nodeSelector from JobObject")
-				return err
-			}
-		*/
+
+		// remove node selector if it was added by this controller
+		//if err := removeNodeSelector(jobObject); err != nil {
+		//	log.Error(err, "Unable to remove nodeSelector from JobObject")
+		//	return err
+		//	}
+
 		_, err = r.DynamicClient.Resource(mapping.Resource).Namespace(wl.Namespace).Update(ctx, jobObject, metav1.UpdateOptions{})
 		if err != nil {
 			log.Error(err, "Error when Updating object ")
@@ -450,33 +459,37 @@ func (r *WorkloadReconciler) ReclaimQuota(ctx context.Context, wl *kueue.Workloa
 
 	//setRequeued := evCond.Reason == kueue.WorkloadEvictedByPreemption || evCond.Reason == kueue.WorkloadEvictedByAdmissionCheck
 	//workload.UnsetQuotaReservationWithCondition(wl, reason, message)
-	_ = workload.UnsetQuotaReservationWithCondition(wl, kueue.WorkloadEvictedByPodsReadyTimeout, message)
-	err = workload.ApplyAdmissionStatus(ctx, cl, wl, true)
-	if err != nil {
-		return fmt.Errorf("clearing admission: %w", err)
-	}
-	relevantChecks, err := admissioncheck.FilterForController(ctx, cl, wl.Status.AdmissionChecks, ControllerName)
-	if err != nil {
-		return err
-	}
 
-	if len(relevantChecks) == 0 {
-		return nil
-	}
+	/*
+		Keep this for now
 
-	if acs := workload.FindAdmissionCheck(wl.Status.AdmissionChecks, relevantChecks[0]); acs != nil {
-		// add a condition to force Keueu to requeue a workload
-		acs.State = kueue.CheckStatePending
-		acs.Message = "Requeued"
-		acs.LastTransitionTime = metav1.NewTime(time.Now())
-		wlPatch := workload.BaseSSAWorkload(wl)
-		workload.SetAdmissionCheckState(&wlPatch.Status.AdmissionChecks, *acs)
-		err = cl.Status().Patch(ctx, wlPatch, client.Apply, client.FieldOwner(ControllerName), client.ForceOwnership)
-		if err != nil {
-			return err
-		}
-	}
+			_ = workload.UnsetQuotaReservationWithCondition(wl, kueue.WorkloadEvictedByPodsReadyTimeout, message)
+			err = workload.ApplyAdmissionStatus(ctx, cl, wl, true)
+			if err != nil {
+				return fmt.Errorf("clearing admission: %w", err)
+			}
+			relevantChecks, err := admissioncheck.FilterForController(ctx, cl, wl.Status.AdmissionChecks, ControllerName)
+			if err != nil {
+				return err
+			}
 
+			if len(relevantChecks) == 0 {
+				return nil
+			}
+
+			if acs := workload.FindAdmissionCheck(wl.Status.AdmissionChecks, relevantChecks[0]); acs != nil {
+				// add a condition to force Keueu to requeue a workload
+				acs.State = kueue.CheckStatePending
+				acs.Message = "Requeued"
+				acs.LastTransitionTime = metav1.NewTime(time.Now())
+				wlPatch := workload.BaseSSAWorkload(wl)
+				workload.SetAdmissionCheckState(&wlPatch.Status.AdmissionChecks, *acs)
+				err = cl.Status().Patch(ctx, wlPatch, client.Apply, client.FieldOwner(ControllerName), client.ForceOwnership)
+				if err != nil {
+					return err
+				}
+			}
+	*/
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		namespacedName := types.NamespacedName{
 			Name:      wl.Name,
@@ -489,7 +502,7 @@ func (r *WorkloadReconciler) ReclaimQuota(ctx context.Context, wl *kueue.Workloa
 		}
 
 		log.Info("ReclaimQuota - --- removing Conditions")
-		//	newWl.Status.Conditions = []metav1.Condition{}
+		//newWl.Status.Conditions = []metav1.Condition{}
 
 		if existing := apimeta.FindStatusCondition(newWl.Status.Conditions, Pending); existing != nil {
 			apimeta.RemoveStatusCondition(&newWl.Status.Conditions, Pending)
@@ -497,18 +510,22 @@ func (r *WorkloadReconciler) ReclaimQuota(ctx context.Context, wl *kueue.Workloa
 		if existing := apimeta.FindStatusCondition(newWl.Status.Conditions, ClusterAssigned); existing != nil {
 			apimeta.RemoveStatusCondition(&newWl.Status.Conditions, ClusterAssigned)
 		}
-		if existing := apimeta.FindStatusCondition(newWl.Status.Conditions, kueue.WorkloadQuotaReserved); existing != nil {
-			apimeta.RemoveStatusCondition(&newWl.Status.Conditions, kueue.WorkloadQuotaReserved)
+		if existing := apimeta.FindStatusCondition(newWl.Status.Conditions, TimedoutAwaitingPodsReady); existing != nil {
+			apimeta.RemoveStatusCondition(&newWl.Status.Conditions, TimedoutAwaitingPodsReady)
 		}
-		/*
-			newCondition := metav1.Condition{
-				Type:    kueue.WorkloadEvicted,
-				Status:  metav1.ConditionFalse,
-				Reason:  kueue.WorkloadEvictedByPodsReadyTimeout,
-				Message: "Exceeded the PodsReady timeout ns",
-			}
-			apimeta.SetStatusCondition(&newWl.Status.Conditions, newCondition)
-		*/
+
+		newCondition := metav1.Condition{
+			Type:    kueue.WorkloadEvicted,
+			Status:  metav1.ConditionTrue,
+			Reason:  kueue.WorkloadEvictedByPodsReadyTimeout,
+			Message: "Exceeded the PodsReady timeout ns",
+		}
+		apimeta.SetStatusCondition(&newWl.Status.Conditions, newCondition)
+
+		r.triggerDeactivationOrBackoffRequeue(ctx, newWl)
+
+		_ = workload.UnsetQuotaReservationWithCondition(newWl, kueue.WorkloadEvictedByPodsReadyTimeout, message)
+
 		err = cl.Status().Update(ctx, newWl)
 		if err != nil {
 			//	log.Error(err, "Error when Updating status of the workload object ")
@@ -522,6 +539,53 @@ func (r *WorkloadReconciler) ReclaimQuota(ctx context.Context, wl *kueue.Workloa
 	}
 
 	return nil
+}
+func (r *WorkloadReconciler) triggerDeactivationOrBackoffRequeue(ctx context.Context, wl *kueue.Workload) (bool, error) {
+	//log := log.FromContext(ctx)
+
+	if wl.Status.RequeueState == nil {
+		wl.Status.RequeueState = &kueue.RequeueState{}
+	}
+	// If requeuingBackoffLimitCount equals to null, the workloads is repeatedly and endless re-queued.
+	requeuingCount := ptr.Deref(wl.Status.RequeueState.Count, 0) + 1
+	/*
+		if r.waitForPodsReady.requeuingBackoffLimitCount != nil && requeuingCount > *r.waitForPodsReady.requeuingBackoffLimitCount {
+			workload.SetDeactivationTarget(wl, kueue.WorkloadRequeuingLimitExceeded,
+				"exceeding the maximum number of re-queuing retries")
+			if err := workload.ApplyAdmissionStatus(ctx, r.client, wl, true); err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+			WithWaitForPodsReady(&waitForPodsReadyConfig{
+					timeout:                     3 * time.Second,
+					requeuingBackoffLimitCount:  ptr.To[int32](100),
+					requeuingBackoffBaseSeconds: 10,
+					requeuingBackoffJitter:      0,
+					requeuingBackoffMaxDuration: time.Duration(3600) * time.Second,
+				}),
+	*/
+	// Every backoff duration is about "60s*2^(n-1)+Rand" where:
+	// - "n" represents the "requeuingCount",
+	// - "Rand" represents the random jitter.
+	// During this time, the workload is taken as an inadmissible and other
+	// workloads will have a chance to be admitted.
+	backoff := &wait.Backoff{
+		Duration: time.Duration(10) * time.Second,
+		Factor:   2,
+		Jitter:   0,
+		Steps:    int(requeuingCount),
+	}
+	var waitDuration time.Duration
+	for backoff.Steps > 0 {
+		waitDuration = min(backoff.Step(), time.Duration(3600)*time.Second)
+	}
+
+	fmt.Printf("---------------- triggerDeactivationOrBackoffRequeue() ---- waitDuration %v\n", waitDuration)
+	fmt.Printf("---------------- triggerDeactivationOrBackoffRequeue() - clock now  %v\n", r.Clock.Now())
+	wl.Status.RequeueState.RequeueAt = ptr.To(metav1.NewTime(r.Clock.Now().Add(waitDuration)))
+	wl.Status.RequeueState.Count = &requeuingCount
+	return false, nil
 }
 func (r *WorkloadReconciler) requeueDueToNoQuota(ctx context.Context, wl kueue.Workload) error {
 	relevantChecks, err := admissioncheck.FilterForController(ctx, r.Client, wl.Status.AdmissionChecks, ControllerName)
@@ -790,6 +854,7 @@ func (r *WorkloadReconciler) createBindingPolicy(ctx context.Context, meta metav
 								},
 							},
 						},
+						CreateOnly: true,
 					},
 				}
 

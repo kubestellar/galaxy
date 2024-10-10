@@ -203,7 +203,6 @@ func main() {
 
 	rm := restmapper.NewDiscoveryRESTMapper(groupResources)
 	wr := &controller.WorkloadReconciler{
-
 		Client:                 kflexMgr.GetClient(),
 		KueueClient:            kClient,
 		DynamicClient:          dynClient,
@@ -211,6 +210,7 @@ func main() {
 		Scheduler:              scheduler.NewDefaultScheduler(),
 		Recorder:               kflexMgr.GetEventRecorderFor("job-recorder"),
 		CleanupWecOnCompletion: deleteOnCompletion,
+		Clock:                  clock.RealClock{},
 	}
 	if err = wr.SetupWithManager(kflexMgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Workload")
