@@ -3,5 +3,7 @@ kind: LocalQueue
 metadata:
   namespace: "default"
   name: "user-queue-ks"
+  labels:
+    app.kubernetes.io/name: kueue
 spec:
   clusterQueue: "cluster-queue-ks"

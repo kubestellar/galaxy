@@ -2,5 +2,8 @@ apiVersion: kueue.x-k8s.io/v1beta1
 kind: AdmissionCheck
 metadata:
   name: kubestellar-admc
+  labels:
+    app.kubernetes.io/name: kueue
+
 spec:
   controllerName: kubestellar.io/ks-kueue

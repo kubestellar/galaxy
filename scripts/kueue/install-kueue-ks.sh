@@ -47,9 +47,11 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 source "${SCRIPT_DIR}/../common/setup-shell.sh"
 source "${SCRIPT_DIR}/../common/config.sh"
 
-export KUBESTELLAR_VERSION=0.24.0
-export OCM_STATUS_ADDON_VERSION=0.2.0-rc11
-export OCM_TRANSPORT_PLUGIN=0.1.11
+#export KUBESTELLAR_VERSION=0.24.0
+export KUBESTELLAR_VERSION=0.25.0-rc.1
+
+#export OCM_STATUS_ADDON_VERSION=0.2.0-rc11
+#export OCM_TRANSPORT_PLUGIN=0.1.11
 
 export KUEUE_VERSION=v0.8.1
 
@@ -65,70 +67,16 @@ function cleanup {
 # Register the cleanup function to be called on EXIT signal
 trap cleanup EXIT
 
-: --------------------------------------------------------------
-
-: clean up all
-
-kubectl config use-context k3d-kubeflex
-
-if ! output=$(kubectl get  deployment kueue-controller-manager -n kueue-system --no-headers 2>&1); then
-    printf "kueue deployment does not exists, not need to delete it\n" >&2
-else
-    printf "Deleting kueue \n" >&2
-    kubectl delete --ignore-not-found -f https://github.com/kubernetes-sigs/kueue/releases/download/${KUEUE_VERSION}/manifests.yaml
-    echo "Deleted!"
-fi
-
-: Deleting bindingpolicies, appwrappers, jobs, clustermetrics
-
-if ! output=$(kubectl --context k3d-kubeflex delete appwrappers --all  2>&1); then
-  echo "" >&2
-fi
-
-kubectl --context k3d-kubeflex delete jobs --all --ignore-not-found
-
-: Deleting kueue-ks controllers
-if ! output=$(  helm delete kueue-ks -n kueue-ks-system --ignore-not-found  2>&1); then
-   echo "" >&2
-fi
-kubectl delete serviceaccount kueue-ks-controller-manager -n kueue-ks-system --ignore-not-found
-kubectl delete clusterrole kueue-ks-kueue-ks-editor-role --ignore-not-found
-kubectl delete clusterrole kueue-ks-manager-role --ignore-not-found
-kubectl delete clusterrole kueue-ks-metrics-reader --ignore-not-found
-kubectl delete role kueue-ks-leader-election-role -n kueue-ks-system --ignore-not-found
-kubectl delete clusterrolebinding kueue-ks-manager-rolebinding --ignore-not-found
-kubectl delete clusterrolebinding kueue-ks-proxy-rolebinding --ignore-not-found
-kubectl delete service kueue-ks-controller-manager-metrics-service -n kueue-ks-system --ignore-not-found
-kubectl delete clusterrole kueue-ks-proxy-role --ignore-not-found
-kubectl delete ns kueue-ks-system --ignore-not-found
-
-: Deleting cluster metrics controller
-if ! output=$( helm --kube-context wds2 delete cluster-metrics --ignore-not-found  2>&1); then
-   echo "" >&2
-fi
-
-
-for cluster in "${clusters[@]}"; do
-  kubectl --context $cluster delete clusterroles appwrappers-access --ignore-not-found
-  kubectl --context $cluster delete clusterrolebindings klusterlet-appwrappers-access --ignore-not-found
-  kubectl --context ${cluster} delete -f https://raw.githubusercontent.com/project-codeflare/appwrapper/main/config/crd/bases/workload.codeflare.dev_appwrappers.yaml --ignore-not-found
-  kubectl --context ${cluster} delete -k github.com/kubeflow/training-operator/manifests/overlays/standalone?ref=v1.5.0 --ignore-not-found
-  kubectl --context ${cluster} delete crd clustermetrics.galaxy.kubestellar.io --ignore-not-found
-  kubectl --context ${cluster} delete ns clustermetrics-system --ignore-not-found
-done
-
-kubectl --context k3d-kubeflex delete -f https://raw.githubusercontent.com/project-codeflare/appwrapper/main/config/crd/bases/workload.codeflare.dev_appwrappers.yaml --ignore-not-found
-kubectl --context k3d-kubeflex delete crd clustermetrics.galaxy.kubestellar.io --ignore-not-found
-kubectl --context k3d-kubeflex delete -f https://raw.githubusercontent.com/kubeflow/training-operator/855e0960668b34992ba4e1fd5914a08a3362cfb1/manifests/base/crds/kubeflow.org_pytorchjobs.yaml --ignore-not-found
-kubectl --context k3d-kubeflex delete ns clustermetrics-system --ignore-not-found
-
-sleep 15
 
 : ----------------- INSTALLING -----------------
 
 #kubectl --context kubeflex apply -f https://raw.githubusercontent.com/kubeflow/training-operator/855e0960668b34992ba4e1fd5914a08a3362cfb1/manifests/base/crds/kubeflow.org_pytorchjobs.yaml
+kubectl --context wds1 create -f ${SCRIPT_DIR}/templates/wec-kueue-ns.yaml
+kubectl --context k3d-kubeflex create -f ${SCRIPT_DIR}/templates/wec-bp-kueue.yaml
+kubectl --context k3d-kubeflex create -f ${SCRIPT_DIR}/templates/wec-clustermetrics-ns.yaml
+kubectl --context wds1 create -f ${SCRIPT_DIR}/templates/wec-clustermetrics-ns.yaml
 
-: Installing kueue controller
+: Installing kueue controller on control cluster
 kubectl --context k3d-kubeflex apply --server-side -f https://github.com/kubernetes-sigs/kueue/releases/download/$KUEUE_VERSION/manifests.yaml
 
 : waiting for kueue controller to come up
@@ -145,32 +93,57 @@ kubectl --context k3d-kubeflex create -f ${SCRIPT_DIR}/templates/zero-cluster-gp
 
 kubectl config use-context k3d-kubeflex
 
-: Deploy clustermetrics to  each Cluster
-: install cluster-metrics controller on all clusters
+#: Deploy clustermetrics to  each Cluster
+#: install cluster-metrics controller on all clusters
 
 cd ${SCRIPT_DIR}/../../clustermetrics
 
-make ko-local-build
+#make ko-local-build
 
 kubectl --context k3d-kubeflex apply -f config/crd/bases
+kubectl --context wds1 apply -f config/crd/bases
 
-contexts=(cluster1 cluster2);
-for context in "${contexts[@]}"; do
-    kubectl --context ${context} apply -f config/crd/bases
-    kubectl --context ${context} apply -f ${SCRIPT_DIR}/../common/templates/cluster-metrics-rbac.yaml
-    kubectl --context ${context} apply -f ${SCRIPT_DIR}/../common/templates/cluster-metrics-${context}.yaml
-    cluster=${context}
-    CONTEXT=${context} CLUSTER=${cluster} HELM_OPTS="--set clusterName=${cluster}" make k3d-install-local-chart
-    kubectl --context ${context} apply -f https://raw.githubusercontent.com/project-codeflare/appwrapper/main/config/crd/bases/workload.codeflare.dev_appwrappers.yaml
-    kubectl --context ${context} apply -k "github.com/kubeflow/training-operator/manifests/overlays/standalone?ref=v1.7.0"
-    kubectl --context k3d-kubeflex apply -f ${SCRIPT_DIR}/../common/templates/cluster-metrics-${cluster}.yaml
-    kubectl --context ${context} apply -f https://raw.githubusercontent.com/kubeflow/training-operator/855e0960668b34992ba4e1fd5914a08a3362cfb1/manifests/base/crds/kubeflow.org_pytorchjobs.yaml
-done
+: Deploy manifests to WDS1 and will trigger pull from each wec
+#kubectl --context wds1 create -f ${SCRIPT_DIR}/templates/wec-manifests.yaml
+
+kubectl --context wds1 create -f ${SCRIPT_DIR}/templates/wec-kueue-ks-ns.yaml
+kubectl --context wds1 create -f ${SCRIPT_DIR}/templates/wec-rbac-kueue-ks.yaml
+kubectl --context wds1 create -f ${SCRIPT_DIR}/templates/wec-kueue-clusterqueue-crd.yaml
+kubectl --context wds1 create -f ${SCRIPT_DIR}/templates/wec-cluster-queue.yaml
+kubectl --context wds1 create -f ${SCRIPT_DIR}/templates/wec-bp-kueue-ks.yaml
+kubectl --context wds1 create -f ${SCRIPT_DIR}/templates/wec-bp-kueue.yaml
+kubectl --context wds1 create -f ${SCRIPT_DIR}/templates/wec-bp-clustermetrics.yaml
+kubectl --context wds1 create -f ${SCRIPT_DIR}/templates/wec-rbac-clustermetrics.yaml
+
+#kubectl --context wds1 create -f ${SCRIPT_DIR}/templates/kueue-manifests.yaml
+
+#contexts=(cluster1 cluster2);
+#for context in "${contexts[@]}"; do
+#    : Installing kueue controller on the WEC
+#    kubectl --context ${context} apply --server-side -f https://github.com/kubernetes-sigs/kueue/releases/download/$KUEUE_VERSION/manifests.yaml
+
+ #   : waiting for kueue controller to come up on the WEC
+ #   wait-for-cmd '(($(wrap-cmd kubectl --context ${context} get deployments -n kueue-system -o jsonpath='{.status.readyReplicas}' kueue-controller-manager 2>/dev/null || echo 0) >= 1))'
+
+
+# GOOD   kubectl --context ${context} apply -f config/crd/bases
+# GGOD    kubectl --context ${context} apply -f ${SCRIPT_DIR}/../common/templates/cluster-metrics-rbac.yaml
+#    kubectl --context ${context} apply -f ${SCRIPT_DIR}/../common/templates/cluster-metrics-${context}.yaml
+    #luster=${context}
+    # GOOD CONTEXT=${context} CLUSTER=${cluster} HELM_OPTS="--set clusterName=${cluster}" make k3d-install-local-chart
+    #kubectl --context ${context} apply -f https://raw.githubusercontent.com/project-codeflare/appwrapper/main/config/crd/bases/workload.codeflare.dev_appwrappers.yaml
+    #kubectl --context ${context} apply -k "github.com/kubeflow/training-operator/manifests/overlays/standalone?ref=v1.7.0"
+# GOOD    kubectl --context k3d-kubeflex apply -f ${SCRIPT_DIR}/../common/templates/cluster-metrics-${cluster}.yaml
+  #  kubectl --context ${context} apply -f https://raw.githubusercontent.com/kubeflow/training-operator/855e0960668b34992ba4e1fd5914a08a3362cfb1/manifests/base/crds/kubeflow.org_pytorchjobs.yaml
+#done
 
 kubectl --context k3d-kubeflex apply -f https://raw.githubusercontent.com/project-codeflare/appwrapper/main/config/crd/bases/workload.codeflare.dev_appwrappers.yaml
 
-kubectl --context k3d-kubeflex apply -f  ${SCRIPT_DIR}/templates/status-collector.yaml
+# GOOD kubectl --context k3d-kubeflex apply -f  ${SCRIPT_DIR}/templates/status-collector.yaml
 
+    kubectl --context wds1 apply -f https://raw.githubusercontent.com/project-codeflare/appwrapper/main/config/crd/bases/workload.codeflare.dev_appwrappers.yaml
+#    kubectl --context wds1 apply -k "github.com/kubeflow/training-operator/manifests/overlays/standalone?ref=v1.7.0"
+#    kubectl --context wds1 apply -f https://raw.githubusercontent.com/kubeflow/training-operator/855e0960668b34992ba4e1fd5914a08a3362cfb1/manifests/base/crds/kubeflow.org_pytorchjobs.yaml
 
 
 cd ${SCRIPT_DIR}
@@ -193,12 +166,16 @@ kubectl config use-context k3d-kubeflex
 #kubectl --context kubeflex create -f ${SCRIPT_DIR}/templates/transform-pytorch-job.yaml
 
 for cluster in "${clusters[@]}"; do
-       kubectl --context k3d-kubeflex apply -f ${SCRIPT_DIR}/templates/binding-policy-${cluster}.yaml
-kubectl --context ${cluster} apply -f - <<EOF
+#      kubectl --context k3d-kubeflex apply -f ${SCRIPT_DIR}/templates/binding-policy-${cluster}.yaml
+#      kubectl --context k3d-kubeflex apply -f ${SCRIPT_DIR}/templates/wl-binding-policy-${cluster}.yaml
+#kubectl --context ${cluster} apply -f - <<EOF
+kubectl --context wds1 apply -f - <<EOF
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: appwrappers-access
+  labels:
+    app.kubernetes.io/name: kueue-ks
 rules:
 - apiGroups: ["workload.codeflare.dev"]
   resources: ["appwrappers"]
@@ -218,6 +195,8 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: klusterlet-appwrappers-access
+  labels:
+    app.kubernetes.io/name: kueue-ks
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -227,6 +206,12 @@ subjects:
   name: klusterlet-work-sa
   namespace: open-cluster-management-agent
 EOF
+done
+
+contexts=(cluster1 cluster2);
+for context in "${contexts[@]}"; do
+  : Wait for Kueue manifests to propagate from wds1 to each wec and for kueue controller to start
+  wait-for-cmd '(($(wrap-cmd kubectl --context ${context} get deployments -n kueue-system -o jsonpath='{.status.readyReplicas}' kueue-controller-manager 2>/dev/null || echo 0) >= 1))'
 done
 
 cd ${SCRIPT_DIR}/../../kueue-ks

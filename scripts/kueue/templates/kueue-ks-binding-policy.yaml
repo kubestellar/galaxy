@@ -1,15 +1,13 @@
 apiVersion: control.kubestellar.io/v1alpha1
 kind: BindingPolicy
 metadata:
-  name: cluster1
+  name: kueue-ks-wec-bp
 spec:
   clusterSelectors:
   - matchLabels:
-      name: cluster1
       location-group: edge
   downsync:
   - createOnly: true
     objectSelectors:
     - matchLabels:
-        kubestellar.io/cluster: cluster1
-  wantSingletonReportedState: true
+        app.kubernetes.io/name: kueue-ks
