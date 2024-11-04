@@ -183,11 +183,11 @@ func (r *WorkloadReconciler) handleJobWithQuota(ctx context.Context, wl *kueue.W
 				return reconcile.Result{}, err
 			}
 			return ctrl.Result{RequeueAfter: time.Duration(1 * float64(time.Second))}, nil
-		} else {
+		} /* else {
 			if r.jobPendingPodReadyTimeout(ctx, jobObject.GetName(), jobObject.GetNamespace()) {
 				log.Info("............ Job Pods stuck in Pending state beyond allowed threshold - evicting job from the WEC")
 			}
-		}
+		} */
 
 	} else {
 		podSpecs, err := extractPodSpecList(wl)
@@ -318,7 +318,7 @@ func (r *WorkloadReconciler) injectNodeSelector(job *unstructured.Unstructured, 
 	if !ok {
 		return fmt.Errorf("job template is not a map")
 	}
-	template["spec"].(map[string]interface{})["nodeSelector"] = map[string]string{"instance": "spot"}
+	template["spec"].(map[string]interface{})["nodeSelector"] = map[string]string{"instance": flavor}
 
 	if job.GetAnnotations() == nil {
 		job.SetAnnotations(map[string]string{})

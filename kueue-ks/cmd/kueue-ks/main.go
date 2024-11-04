@@ -92,6 +92,7 @@ func main() {
 	var enableHTTP2 bool
 	var clusterQueue string
 	var clusterMetricsImage string
+	var clusterMetricsImageTag string
 	var deleteOnCompletion bool
 	var defaultResourceFlavorName string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8085", "The address the metric endpoint binds to.")
@@ -105,6 +106,8 @@ func main() {
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.StringVar(&clusterQueue, "clusterQueue-name", "cluster-queue-ks", "cluster queue name")
 	flag.StringVar(&clusterMetricsImage, "clusterMetricsImage", "", "clustermetrics image")
+	flag.StringVar(&clusterMetricsImageTag, "clusterMetricsImageTag", "", "clustermetrics image tag")
+
 	flag.BoolVar(&deleteOnCompletion, "deleteOnCompletion", false, "If set, workload will be auto cleaned up from the WEC")
 	flag.StringVar(&defaultResourceFlavorName, "defaultResourceFlavorName", "default-flavor", "default flavor name")
 	opts := zap.Options{
@@ -114,6 +117,7 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
 	// prevent from being vulnerable to the HTTP/2 Stream Cancellation and
@@ -124,6 +128,8 @@ func main() {
 		setupLog.Info("disabling http/2")
 		c.NextProtos = []string{"http/1.1"}
 	}
+	clusterMetricsImage = clusterMetricsImage + ":" + clusterMetricsImageTag
+	fmt.Printf("---------------- clusterMetricsImage %v\n", clusterMetricsImage)
 
 	enableLeaderElection = false
 	tlsOpts := []func(*tls.Config){}

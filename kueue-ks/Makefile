@@ -6,8 +6,11 @@ IMAGE_TAG ?= $(shell git rev-parse --short HEAD)
 CMD_NAME ?= kueue-ks
 IMG ?= ${KO_DOCKER_REPO}/${CMD_NAME}:${IMAGE_TAG}
 HELM_IMG := --set image=${IMG}
-HELM_OPTS := ${HELM_OPTS} ${HELM_IMG}
-@echo ${HELM_OPTS}
+#CLUSTER_METRICS_IMAGE ?= --set clusterMetricsImage=ghcr.io/cwiklik/clustermetrics
+#CLUSTER_METRICS_IMAGE_TAG ?= --set clusterMetricsImageTag=v1
+HELM_OPTS ?= ${HELM_IMG}
+#${CLUSTER_METRICS_IMAGE} ${CLUSTER_METRICS_IMAGE_TAG}
+echo ${HELM_OPTS}
 
 #FOO ?= " --set image=${IMG}"
 

@@ -611,6 +611,8 @@ spec:
         - --metrics-bind-address=127.0.0.1:8080
         - --leader-elect
         - --deleteOnCompletion={{.Values.deleteOnCompletion}}
+        - --clusterMetricsImage={{.Values.clusterMetricsImage}}
+        - --clusterMetricsImageTag={{.Values.clusterMetricsImageTag}}
         image: {{.Values.image}}
         livenessProbe:
           httpGet:

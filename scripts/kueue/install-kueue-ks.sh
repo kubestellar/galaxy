@@ -218,4 +218,4 @@ cd ${SCRIPT_DIR}/../../kueue-ks
 
 make ko-local-build
 
-CONTEXT=k3d-kubeflex CLUSTER=kubeflex HELM_OPTS="--set queueName=cluster-queue-ks" make k3d-install-local-chart
+CONTEXT=k3d-kubeflex CLUSTER=kubeflex make k3d-install-local-chart
