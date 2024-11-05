@@ -51,3 +51,7 @@ kubectl --context kind-kubeflex get managedclusters
 for cluster in "${clusters[@]}"; do
     kubectl --context kind-kubeflex label managedcluster ${cluster} location-group=edge name=${cluster}
 done
+
+: switch back context to kind-kubeflex
+
+kubectl config use-context kind-kubeflex
