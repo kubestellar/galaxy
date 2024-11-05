@@ -99,6 +99,7 @@ rules:
   - admissionchecks
   - workloads
   - clusterqueues
+  - localqueues
   - resourceflavors
   verbs:
   - create
@@ -224,6 +225,7 @@ rules:
   - admissionchecks
   - workloads
   - clusterqueues
+  - localqueues
   - resourceflavors
   verbs:
   - create
@@ -312,7 +314,9 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: kueue-ks-manager-role
+  labels:
+    app.kubernetes.io/name: kueue-ks
+  name: kueue-ks-controller-manager
 rules:
 - apiGroups:
   - ""
@@ -383,6 +387,7 @@ rules:
   - admissionchecks
   - workloads
   - clusterqueues
+  - localqueues
   - resourceflavors
   verbs:
   - create
@@ -510,6 +515,8 @@ subjects:
 - kind: ServiceAccount
   name: kueue-ks-controller-manager
   namespace: kueue-ks-system
+- kind: User
+  name: system:serviceaccount:open-cluster-management-agent:klusterlet-work-sa
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -521,11 +528,13 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: kueue-ks-manager-role
+  name: kueue-ks-controller-manager
 subjects:
 - kind: ServiceAccount
   name: kueue-ks-controller-manager
   namespace: kueue-ks-system
+- kind: User
+  name: system:serviceaccount:open-cluster-management-agent:klusterlet-work-sa
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -542,6 +551,8 @@ subjects:
 - kind: ServiceAccount
   name: kueue-ks-controller-manager
   namespace: kueue-ks-system
+- kind: User
+  name: system:serviceaccount:open-cluster-management-agent:klusterlet-work-sa
 ---
 apiVersion: v1
 kind: Service
@@ -561,85 +572,3 @@ spec:
   selector:
     control-plane: controller-manager
 ---
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  labels:
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: kueue-ks
-    control-plane: controller-manager
-  name: kueue-ks-controller-manager
-  namespace: kueue-ks-system
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      control-plane: controller-manager
-  template:
-    metadata:
-      annotations:
-        kubectl.kubernetes.io/default-container: manager
-      labels:
-        control-plane: controller-manager
-    spec:
-      containers:
-      - args:
-        - --secure-listen-address=0.0.0.0:8443
-        - --upstream=http://127.0.0.1:8080/
-        - --logtostderr=true
-        - --v=0
-        image: gcr.io/kubebuilder/kube-rbac-proxy:v0.16.0
-        name: kube-rbac-proxy
-        ports:
-        - containerPort: 8443
-          name: https
-          protocol: TCP
-        resources:
-          limits:
-            cpu: 500m
-            memory: 128Mi
-          requests:
-            cpu: 5m
-            memory: 64Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-      - args:
-        - --health-probe-bind-address=:8085
-        - --metrics-bind-address=127.0.0.1:8080
-        - --leader-elect
-        - --deleteOnCompletion={{.Values.deleteOnCompletion}}
-        - --clusterMetricsImage={{.Values.clusterMetricsImage}}
-        - --clusterMetricsImageTag={{.Values.clusterMetricsImageTag}}
-        image: {{.Values.image}}
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 8085
-          initialDelaySeconds: 7200
-          periodSeconds: 20
-        name: manager
-        readinessProbe:
-          httpGet:
-            path: /readyz
-            port: 8085
-          initialDelaySeconds: 7200
-          periodSeconds: 10
-        resources:
-          limits:
-            cpu: 500m
-            memory: 128Mi
-          requests:
-            cpu: 10m
-            memory: 64Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-      securityContext:
-        runAsNonRoot: true
-      serviceAccountName: kueue-ks-controller-manager
-      terminationGracePeriodSeconds: 10

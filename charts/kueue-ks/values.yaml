@@ -1,5 +1,6 @@
 deleteOnCompletion: false
-
+clusterMetricsImage: ghcr.io/cwiklik/clustermetrics
+clusterMetricsImageTag: v1
 service:
   type: ClusterIP
   port: 80

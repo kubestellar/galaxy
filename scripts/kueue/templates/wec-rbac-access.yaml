@@ -1,0 +1,31 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: appwrappers-access
+rules:
+- apiGroups: ["workload.codeflare.dev"]
+  resources: ["appwrappers"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["workloads.kueue.x-k8s.io"]
+  resources: ["workload"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["galaxy.kubestellar.io"]
+  resources: ["clustermetrics"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["kubeflow.org"]
+  resources: ["pytorchjobs"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: klusterlet-appwrappers-access
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: appwrappers-access
+subjects:
+- kind: ServiceAccount
+  name: klusterlet-work-sa
+  namespace: open-cluster-management-agent

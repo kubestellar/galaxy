@@ -30,6 +30,7 @@ import (
 	kfv1aplha1 "github.com/kubestellar/kubeflex/api/v1alpha1"
 	ksv1alpha1 "github.com/kubestellar/kubestellar/api/control/v1alpha1"
 	kslclient "github.com/kubestellar/kubestellar/pkg/client"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -42,8 +43,6 @@ import (
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/utils/clock"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -92,6 +91,8 @@ func main() {
 	var probeAddr string
 	var enableHTTP2 bool
 	var clusterQueue string
+	var clusterMetricsImage string
+	var clusterMetricsImageTag string
 	var deleteOnCompletion bool
 	var defaultResourceFlavorName string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8085", "The address the metric endpoint binds to.")
@@ -104,6 +105,9 @@ func main() {
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.StringVar(&clusterQueue, "clusterQueue-name", "cluster-queue-ks", "cluster queue name")
+	flag.StringVar(&clusterMetricsImage, "clusterMetricsImage", "", "clustermetrics image")
+	flag.StringVar(&clusterMetricsImageTag, "clusterMetricsImageTag", "", "clustermetrics image tag")
+
 	flag.BoolVar(&deleteOnCompletion, "deleteOnCompletion", false, "If set, workload will be auto cleaned up from the WEC")
 	flag.StringVar(&defaultResourceFlavorName, "defaultResourceFlavorName", "default-flavor", "default flavor name")
 	opts := zap.Options{
@@ -113,6 +117,7 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
 	// prevent from being vulnerable to the HTTP/2 Stream Cancellation and
@@ -123,6 +128,8 @@ func main() {
 		setupLog.Info("disabling http/2")
 		c.NextProtos = []string{"http/1.1"}
 	}
+	clusterMetricsImage = clusterMetricsImage + ":" + clusterMetricsImageTag
+	fmt.Printf("---------------- clusterMetricsImage %v\n", clusterMetricsImage)
 
 	enableLeaderElection = false
 	tlsOpts := []func(*tls.Config){}
@@ -132,6 +139,18 @@ func main() {
 	webhookServer := webhook.NewServer(webhook.Options{
 		TLSOpts: tlsOpts,
 	})
+
+	wdsConfig, _, err := getRestConfig("wds1", "wds")
+	if err != nil {
+		setupLog.Error(err, "error while calling getRestConfig for wds1")
+		os.Exit(1)
+	}
+
+	itsConfig, _, err := getRestConfig("its1", "its")
+	if err != nil {
+		setupLog.Error(err, "error while calling getRestConfig for its1")
+		os.Exit(1)
+	}
 
 	kflexConfig, err := rest.InClusterConfig()
 	if err != nil {
@@ -158,6 +177,64 @@ func main() {
 
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
+		os.Exit(1)
+	}
+	probeAddr = ":8084"
+	metricsAddr = ":8089"
+
+	its1Mgr, err := manager.New(itsConfig,
+		ctrl.Options{
+			Scheme: scheme,
+			Metrics: metricsserver.Options{
+				BindAddress:   metricsAddr,
+				SecureServing: secureMetrics,
+				TLSOpts:       tlsOpts,
+			},
+			WebhookServer:          webhookServer,
+			HealthProbeBindAddress: probeAddr,
+			LeaderElection:         enableLeaderElection,
+			LeaderElectionID:       "423ebda8.kubestellar.io",
+		},
+	)
+	if err != nil {
+		setupLog.Error(err, "unable to start its1 manager")
+
+		os.Exit(1)
+	}
+
+	probeAddr = ":8083"
+	metricsAddr = ":8088"
+
+	wds1Mgr, err := manager.New(wdsConfig,
+		ctrl.Options{
+			Scheme: scheme,
+			Metrics: metricsserver.Options{
+				BindAddress:   metricsAddr,
+				SecureServing: secureMetrics,
+				TLSOpts:       tlsOpts,
+			},
+			WebhookServer:          webhookServer,
+			HealthProbeBindAddress: probeAddr,
+			LeaderElection:         enableLeaderElection,
+			LeaderElectionID:       "423ebda8.kubestellar.io",
+		},
+	)
+	if err != nil {
+		setupLog.Error(err, "unable to start wds1 manager")
+
+		os.Exit(1)
+	}
+
+	//setupReconciller(its1Mgr, wds1Mgr, kflexMgr)
+	if err = (&controller.ManagedClusterReconciler{
+		Client:              its1Mgr.GetClient(),
+		Scheme:              its1Mgr.GetScheme(),
+		Its1Client:          its1Mgr.GetClient(),
+		Wds1Client:          wds1Mgr.GetClient(),
+		KubeflexClient:      kflexMgr.GetClient(),
+		ClusterMetricsImage: clusterMetricsImage,
+	}).SetupWithManager(its1Mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ManagedCluster")
 		os.Exit(1)
 	}
 
@@ -210,24 +287,12 @@ func main() {
 		Scheduler:              scheduler.NewDefaultScheduler(),
 		Recorder:               kflexMgr.GetEventRecorderFor("job-recorder"),
 		CleanupWecOnCompletion: deleteOnCompletion,
+		Clock:                  clock.RealClock{},
 	}
 	if err = wr.SetupWithManager(kflexMgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Workload")
 		os.Exit(1)
 	}
-	/*
-		if err = (&controller.WorkloadReconciler{
-			Client:        kflexMgr.GetClient(),
-			KueueClient:   kClient,
-			DynamicClient: dynClient,
-			RestMapper:    rm,
-			Scheduler:     scheduler.NewDefaultScheduler(),
-			Recorder:      kflexMgr.GetEventRecorderFor("job-recorder"),
-		}).SetupWithManager(kflexMgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "Workload")
-			os.Exit(1)
-		}
-	*/
 	if err = (&controller.CombinedStatusReconciler{
 		Client:             kflexMgr.GetClient(),
 		Scheme:             kflexMgr.GetScheme(),
@@ -241,6 +306,18 @@ func main() {
 	//+kubebuilder:scaffold:builder
 
 	go func() {
+		if err := its1Mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+			setupLog.Error(err, "problem running its1 manager")
+			os.Exit(1)
+		}
+	}()
+	go func() {
+		if err := wds1Mgr.Start(context.Background()); err != nil {
+			setupLog.Error(err, "problem running wds1 manager")
+			os.Exit(1)
+		}
+	}()
+	go func() {
 		if err := kflexMgr.Start(k8sctx); err != nil {
 			setupLog.Error(err, "problem running kubeflex manager")
 			os.Exit(1)
@@ -251,11 +328,12 @@ func main() {
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func setupReconciller(its1Mgr ctrl.Manager, kflexMgr ctrl.Manager) error {
+func setupReconciller(its1Mgr ctrl.Manager, wds1Mgr ctrl.Manager, kflexMgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(kflexMgr).
 		Complete(&controller.ManagedClusterReconciler{
 			Scheme:         its1Mgr.GetScheme(),
 			Its1Client:     its1Mgr.GetClient(),
+			Wds1Client:     wds1Mgr.GetClient(),
 			KubeflexClient: kflexMgr.GetClient(),
 		})
 }

@@ -99,8 +99,13 @@ func (r *CombinedStatusReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 		return reconcile.Result{}, client.IgnoreNotFound(err)
 	}
-	//r.handleUnstructuredStatus(ctx, cs)
-	r.handleStatus(ctx, cs)
+
+	if resource, found := cs.Labels["status.kubestellar.io/resource"]; found {
+		if resource == "jobs" {
+			r.handleStatus(ctx, cs)
+		}
+	}
+
 	return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 }
 
@@ -118,18 +123,7 @@ func (r *CombinedStatusReconciler) handleStatus(ctx context.Context, cs *ksv1alp
 						log.Error(err, "Error when extracting status object from CombinedStatus ")
 					}
 					log.Info("Remote Job", "Active:", statusObject.Active, "Ready:", statusObject.Ready, "StartTime:", statusObject.StartTime)
-					/*
-						jobName, found := cs.Labels["status.kubestellar.io/name"]
-						if !found {
-							log.Info("CombinedStatus status.kubestellar.io/name label is missing", "combinedstatus name", cs.Name)
-							return
-						}
-						jobNamespace, found := cs.Labels["status.kubestellar.io/namespace"]
-						if !found {
-							log.Info("CombinedStatus status.kubestellar.io/name label is missing", "combinedstatus name", cs.Name)
-							return
-						}
-					*/
+
 					wl, err := r.fetchKueueWorkloadForJob(ctx, cs) //jobNamespace, jobName)
 					if err != nil {
 						log.Error(err, "Unable to fetch Workload object")
@@ -140,101 +134,9 @@ func (r *CombinedStatusReconciler) handleStatus(ctx context.Context, cs *ksv1alp
 					evict := r.updateWorkloadAndTestForEviction(ctx, statusObject.Active, *statusObject.Ready, cluster, wl)
 					log.Info("Should evict due to PodsReady timeout", "action", evict)
 					if evict {
-						/*
-							if cs.Annotations == nil {
-								cs.Annotations = make(map[string]string)
-							}
-							cs.Annotations["PodReadyTimeout"] = "true"
-							err := r.Client.Status().Update(ctx, cs)
-							if err != nil {
-								log.Error(err, "Unable to update Workload object")
-								return
-							}
 
-							err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-								newcs := &ksv1alpha1.CombinedStatus{}
-								namespacedName := types.NamespacedName{
-									Name:      cs.Name,
-									Namespace: cs.Namespace,
-								}
-
-								if err := r.Client.Get(ctx, namespacedName, newcs); err != nil {
-									log.Error(err, "Error when fetching Workload object ")
-									return err
-								}
-								apimeta.SetStatusCondition(&wl.Status.Conditions, newCondition)
-
-								err := r.Client.Status().Update(ctx, wl)
-								if err != nil {
-									log.Error(err, "Unable to update Workload object")
-									return err
-								}
-								return nil //ctrl.Result{RequeueAfter: time.Duration(1 * float64(time.Second))}, nil
-							})
-							if err != nil {
-								log.Error(err, "Unable to update Workload object")
-								return false
-							}
-						*/
-						//r.WorkloadReconciler.ReclaimQuota(ctx, wl, r.Client, kueue.WorkloadEvictedByPodsReadyTimeout, "Exceeded the PodsReady timeout ns")
-
-						//EvictJobByBindingPolicyDelete(ctx, r.Client, wl)
-						/*
-							metav1.Condition{
-								Type:    kueue.WorkloadEvicted,
-								Status:  metav1.ConditionFalse,
-								Reason:  kueue.WorkloadEvictedByPodsReadyTimeout,
-								Message: "Exceeded the PodsReady timeout ns",
-							}
-						*/
 					}
-					/*
-						if statusObject.Active > 0 && *statusObject.Ready < statusObject.Active {
-							log.Info("+++ Job pods are in Pending state")
 
-							if !apimeta.IsStatusConditionTrue(wl.Status.Conditions, string(kueue.CheckStatePending)) {
-
-								log.Info("............ Adding Pending condition", "Job", wl.Name, "Namespace", wl.Namespace)
-								newCondition := metav1.Condition{
-									Type:    string(kueue.CheckStatePending),
-									Status:  metav1.ConditionTrue,
-									Reason:  "JobStatus",
-									Message: fmt.Sprintf("Job pods Pending on Work Cluster %q", *cs.Results[0].Rows[0].Columns[0].String),
-								}
-								apimeta.SetStatusCondition(&wl.Status.Conditions, newCondition)
-
-								err := r.Client.Status().Update(ctx, wl)
-								if err != nil {
-									log.Error(err, "Unable to update Workload object")
-									return
-								}
-							} else if apimeta.IsStatusConditionTrue(wl.Status.Conditions, "ClusterAssigned") {
-								condition := apimeta.FindStatusCondition(wl.Status.Conditions, "ClusterAssigned")
-								elapsedTime := r.clock.Since(condition.LastTransitionTime.Time)
-								if elapsedTime.Minutes() > 1 {
-									log.Info("Exceeded time threshold while waiting for pods Ready on remote cluster")
-								}
-							}
-
-						} else if statusObject.Active > 0 && *statusObject.Ready == statusObject.Active {
-							log.Info("............ Got Quota Reservation", "Job", wl.Name, "Namespace", wl.Namespace)
-							if !apimeta.IsStatusConditionTrue(wl.Status.Conditions, string(kueue.CheckStatePending)) {
-								newCondition := metav1.Condition{
-									Type:    string(kueue.CheckStateReady),
-									Status:  metav1.ConditionTrue,
-									Reason:  "JobStatus",
-									Message: "Job Pods are Ready on the Work Cluster",
-								}
-								apimeta.SetStatusCondition(&wl.Status.Conditions, newCondition)
-								err := r.Client.Status().Update(ctx, wl)
-								if err != nil {
-									log.Error(err, "Unable to update Workload object")
-									return
-								}
-							}
-
-						}
-					*/
 				} else {
 					log.Info("status() - CombinedStatus.Results[0].Rows[0].Columns[0].Object is missing")
 				}
@@ -323,8 +225,9 @@ func (r *CombinedStatusReconciler) updateWorkloadAndTestForEviction(ctx context.
 	log := log.FromContext(ctx)
 	if activePods > 0 && readyPods < activePods {
 		log.Info("+++ Job pods are in Pending state")
+		evicted := apimeta.IsStatusConditionTrue(wl.Status.Conditions, kueue.WorkloadEvicted)
 
-		if !apimeta.IsStatusConditionTrue(wl.Status.Conditions, string(kueue.CheckStatePending)) {
+		if !evicted && !apimeta.IsStatusConditionTrue(wl.Status.Conditions, string(kueue.CheckStatePending)) {
 
 			log.Info("............ Adding Pending condition", "Job", wl.Name, "Namespace", wl.Namespace)
 			newCondition := metav1.Condition{
@@ -347,10 +250,10 @@ func (r *CombinedStatusReconciler) updateWorkloadAndTestForEviction(ctx context.
 
 				err := r.Client.Status().Update(ctx, wl)
 				if err != nil {
-					//		log.Error(err, "Unable to update Workload object")
+
 					return err
 				}
-				return nil //ctrl.Result{RequeueAfter: time.Duration(1 * float64(time.Second))}, nil
+				return nil
 			})
 			if err != nil {
 				log.Error(err, "Unable to update Workload object")
@@ -444,32 +347,8 @@ func (r *CombinedStatusReconciler) getActiveAndReady(ctx context.Context, status
 	} else {
 		fmt.Printf(".....activeAsIntf is unknown type\n")
 	}
-	/*
-		activeAsString, ok := activeAsIntf.(int32)
-		if ok {
-			active, err := strconv.Atoi(activeAsString)
-			if err != nil {
-				log.Error(err, "unable to convert active - value: %v", active)
-			}
-			if active > 0 {
-				readyAsString, ok := readyAsIntf.(string)
-				if ok {
-					ready, err := strconv.Atoi(string(readyAsString))
-					if err != nil {
-						log.Error(err, "unable to convert ready - value: %v", ready)
-					}
-					readyPods = ready
-				}
-			} else {
-				log.Info("active is zero", "activeAsString", activeAsString)
-			}
-			return active, readyPods
-		} else {
-			log.Info(" activeAsIntf.(string) returned error", "activeAsString", activeAsString)
-		}
-	*/
+
 	active, _ := activeAsIntf.(int32)
-	//if ok {
 
 	if active > 0 {
 		readyAsString, ok := readyAsIntf.(string)
@@ -484,16 +363,12 @@ func (r *CombinedStatusReconciler) getActiveAndReady(ctx context.Context, status
 		log.Info("active is zero", "activeAsString", active)
 	}
 	return int(active), readyPods
-	//	} else {
-	//		log.Info(" activeAsIntf.(string) returned error", "activeAsString", activeAsString)
-	//	}
-	//return 0, 0
+
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *CombinedStatusReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		// Uncomment the following line adding a pointer to an instance of the controlled resource as an argument
 		For(&ksv1alpha1.CombinedStatus{}).
 		Complete(r)
 }

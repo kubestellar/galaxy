@@ -1,4 +1,11 @@
 apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app.kubernetes.io/name: kueue-ks
+  name: kueue-ks-system
+---
+apiVersion: v1
 kind: ServiceAccount
 metadata:
   labels:
@@ -561,85 +568,84 @@ spec:
   selector:
     control-plane: controller-manager
 ---
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: control.kubestellar.io/v1alpha1
+kind: BindingPolicy
 metadata:
-  labels:
-    app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/name: kueue-ks
-    control-plane: controller-manager
-  name: kueue-ks-controller-manager
-  namespace: kueue-ks-system
+  name: kueue-ks-bp
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      control-plane: controller-manager
-  template:
-    metadata:
-      annotations:
-        kubectl.kubernetes.io/default-container: manager
-      labels:
-        control-plane: controller-manager
-    spec:
-      containers:
-      - args:
-        - --secure-listen-address=0.0.0.0:8443
-        - --upstream=http://127.0.0.1:8080/
-        - --logtostderr=true
-        - --v=0
-        image: gcr.io/kubebuilder/kube-rbac-proxy:v0.16.0
-        name: kube-rbac-proxy
-        ports:
-        - containerPort: 8443
-          name: https
-          protocol: TCP
-        resources:
-          limits:
-            cpu: 500m
-            memory: 128Mi
-          requests:
-            cpu: 5m
-            memory: 64Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-      - args:
-        - --health-probe-bind-address=:8085
-        - --metrics-bind-address=127.0.0.1:8080
-        - --leader-elect
-        - --deleteOnCompletion={{.Values.deleteOnCompletion}}
-        - --clusterMetricsImage={{.Values.clusterMetricsImage}}
-        - --clusterMetricsImageTag={{.Values.clusterMetricsImageTag}}
-        image: {{.Values.image}}
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 8085
-          initialDelaySeconds: 7200
-          periodSeconds: 20
-        name: manager
-        readinessProbe:
-          httpGet:
-            path: /readyz
-            port: 8085
-          initialDelaySeconds: 7200
-          periodSeconds: 10
-        resources:
-          limits:
-            cpu: 500m
-            memory: 128Mi
-          requests:
-            cpu: 10m
-            memory: 64Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-      securityContext:
-        runAsNonRoot: true
-      serviceAccountName: kueue-ks-controller-manager
-      terminationGracePeriodSeconds: 10
+  clusterSelectors:
+  - matchLabels:
+      location-group: edge
+  downsync:
+  - createOnly: true
+    objectSelectors:
+    - matchLabels:
+        app.kubernetes.io/name: kueue-ks
+---
+apiVersion: control.kubestellar.io/v1alpha1
+kind: BindingPolicy
+metadata:
+  name: kueue-bp
+spec:
+  clusterSelectors:
+  - matchLabels:
+      location-group: edge
+  downsync:
+  - createOnly: true
+    objectSelectors:
+    - matchLabels:
+        app.kubernetes.io/name: kueue
+---
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: LocalQueue
+metadata:
+  namespace: "default"
+  name: "user-queue-ks"
+  labels:
+    app.kubernetes.io/name: kueue-ks
+spec:
+  clusterQueue: "cluster-queue-ks"
+
+---
+apiVersion: kueue.x-k8s.io/v1beta1
+kind: ClusterQueue
+metadata:
+  name: "cluster-queue-ks"
+  labels:
+    app.kubernetes.io/name: kueue-ks
+spec:
+  preemption:
+    reclaimWithinCohort: Any
+    borrowWithinCohort:
+      policy: LowerPriority
+      maxPriorityThreshold: 100
+    withinClusterQueue: LowerPriority
+  namespaceSelector: {} # match all.
+  resourceGroups:
+  - coveredResources: ["cpu","memory","gpu"]
+    flavors:
+    - name: "h100"
+      resources:
+      - name: "cpu"
+        nominalQuota: 24
+      - name: "memory"
+        nominalQuota: 16Gi
+      - name: "gpu"
+        nominalQuota: 0
+    - name: "a100"
+      resources:
+      - name: "cpu"
+        nominalQuota: 0
+      - name: "memory"
+        nominalQuota: 0Gi
+      - name: "gpu"
+        nominalQuota: 0
+    - name: "spot"
+      resources:
+      - name: "cpu"
+        nominalQuota: 30
+      - name: "memory"
+        nominalQuota: 24Gi
+      - name: "gpu"
+        nominalQuota: 0
+---

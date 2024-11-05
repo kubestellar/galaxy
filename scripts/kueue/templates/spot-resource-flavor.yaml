@@ -2,6 +2,8 @@ apiVersion: kueue.x-k8s.io/v1beta1
 kind: ResourceFlavor
 metadata:
   name: "spot"
+  labels:
+    app.kubernetes.io/name: kueue
 spec:
   nodeLabels:
     instance: spot

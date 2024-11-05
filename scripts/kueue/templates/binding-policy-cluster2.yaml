@@ -8,7 +8,12 @@ spec:
       name: cluster2
       location-group: edge
   downsync:
-  - objectSelectors:
+  - createOnly: true
+    objectSelectors:
     - matchLabels:
         kubestellar.io/cluster: cluster2
+    statusCollection:
+      statusCollectors:
+      - jobs-status-aggregator
+
   wantSingletonReportedState: true
