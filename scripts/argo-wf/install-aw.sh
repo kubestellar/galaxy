@@ -84,14 +84,17 @@ done
 if [[ "${install_webhook}" == "--webhook" ]]; then
   : install mutating admission webhook for workflows on kind-kubeflex
 
-  cd ${SCRIPT_DIR}/../../suspend-webhook
-  kubectl config use-context kind-kubeflex
-  make webhook-local-build && make install-webhook-local-chart
+  helm --kube-context ${core} upgrade --install suspend-webhook \
+    oci://ghcr.io/kubestellar/galaxy/suspend-webhook-chart \
+    --version ${SUSPEND_WEBHOOK_VERSION} \
+    --create-namespace --namespace ksi-system \
+    --set image.repository=ghcr.io/kubestellar/galaxy/suspend-webhook \
+    --set image.tag=${SUSPEND_WEBHOOK_VERSION}
 
   : wait for admission webhook to be up
 
-  wait-for-cmd '(($(wrap-cmd kubectl --context kind-kubeflex get deployments -n ksi-system -o jsonpath='{.status.readyReplicas}' suspend-webhook 2>/dev/null || echo 0) >= 1))'
+  wait-for-deployment ${core} ksi-system suspend-webhook-suspend-webhook-chart 
 fi
 
 echo "you can access the argo console at https://argo.localtest.me:9443"
-echo "you can access the minio console at http://minio.localtest.me:9080"
+echo "you can access the minio console at https://minio.localtest.me:9443"
