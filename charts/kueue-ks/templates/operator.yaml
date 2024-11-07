@@ -613,7 +613,7 @@ spec:
         - --deleteOnCompletion={{.Values.deleteOnCompletion}}
         - --clusterMetricsImage={{.Values.clusterMetricsImage}}
         - --clusterMetricsImageTag={{.Values.clusterMetricsImageTag}}
-        image: {{.Values.image}}
+        image: {{.Values.image}}:{{.Values.imageTag}}
         livenessProbe:
           httpGet:
             path: /healthz

@@ -4,15 +4,13 @@ KO_DOCKER_REPO ?= ko.local
 IMAGE_TAG ?= $(shell git rev-parse --short HEAD)
 #IMAGE_TAG ?= 0.0.1
 CMD_NAME ?= kueue-ks
-IMG ?= ${KO_DOCKER_REPO}/${CMD_NAME}:${IMAGE_TAG}
-HELM_IMG := --set image=${IMG}
+IMG ?= ${KO_DOCKER_REPO}/${CMD_NAME}
+HELM_IMG := --set image=${IMG} --set imageTag=${IMAGE_TAG}
 #CLUSTER_METRICS_IMAGE ?= --set clusterMetricsImage=ghcr.io/cwiklik/clustermetrics
 #CLUSTER_METRICS_IMAGE_TAG ?= --set clusterMetricsImageTag=v1
 HELM_OPTS ?= ${HELM_IMG}
 #${CLUSTER_METRICS_IMAGE} ${CLUSTER_METRICS_IMAGE_TAG}
-echo ${HELM_OPTS}
-
-#FOO ?= " --set image=${IMG}"
+#echo ${HELM_OPTS}
 
 # Image URL to use all building/pushing image targets
 #IMG ?= controller:latest
@@ -144,7 +142,7 @@ ko-local-build:
 
 .PHONY: k3d-load-image
 k3d-load-image:
-	k3d image import ${IMG} -c ${CLUSTER}
+	k3d image import ${IMG}:${IMAGE_TAG} -c ${CLUSTER}
 
 .PHONY: k3d-install-local-chart
 k3d-install-local-chart: k3d-load-image
