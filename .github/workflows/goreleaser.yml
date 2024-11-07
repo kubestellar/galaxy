@@ -89,3 +89,15 @@ jobs:
         ${{ env.CHARTS_PATH }}/suspend-webhook/values.yaml
         helm package ${{ env.CHARTS_PATH }}/suspend-webhook --destination . --version ${chartVersion} --app-version ${chartVersion}
         helm push ./suspend-webhook-chart-${chartVersion}.tgz oci://${{ env.REGISTRY }}/${{ env.REPO }}
+
+
+    - name: Package and push kueue-ks chart
+      run: |
+        chartVersion=$(echo ${{ github.ref_name }} | cut -c 2-)
+        sed -i.bk -e "s|image_placeholder|${{ env.REGISTRY }}/${{ env.REPO }}/kueue-ks|g" \
+        -e "s|tag_placeholder|${{github.ref_name}}|g" \
+        -e "s|cm_placeholder|${{ env.REGISTRY }}/${{ env.REPO }}/cluster-metrics|g" \
+        ${{ env.CHARTS_PATH }}/kueue-ks/values.yaml
+        helm package ${{ env.CHARTS_PATH }}/kueue-ks --destination . --version ${chartVersion} --app-version ${chartVersion}
+        helm push ./kueue-ks-chart-${chartVersion}.tgz oci://${{ env.REGISTRY }}/${{ env.REPO }}
+     

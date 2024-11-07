@@ -214,8 +214,11 @@ for context in "${contexts[@]}"; do
   wait-for-cmd '(($(wrap-cmd kubectl --context ${context} get deployments -n kueue-system -o jsonpath='{.status.readyReplicas}' kueue-controller-manager 2>/dev/null || echo 0) >= 1))'
 done
 
-cd ${SCRIPT_DIR}/../../kueue-ks
 
-make ko-local-build
+: install kueue-ks
 
-CONTEXT=k3d-kubeflex CLUSTER=kubeflex make k3d-install-local-chart
+helm --kube-context k3d-kubeflex upgrade --install kueue-ks \
+      ${SCRIPT_DIR}/../../charts/kueue-ks \
+      --create-namespace --namespace kueue-ks-system 
+    
+
