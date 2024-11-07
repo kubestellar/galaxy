@@ -214,11 +214,11 @@ for context in "${contexts[@]}"; do
   wait-for-cmd '(($(wrap-cmd kubectl --context ${context} get deployments -n kueue-system -o jsonpath='{.status.readyReplicas}' kueue-controller-manager 2>/dev/null || echo 0) >= 1))'
 done
 
-
 : install kueue-ks
 
 helm --kube-context k3d-kubeflex upgrade --install kueue-ks \
-      ${SCRIPT_DIR}/../../charts/kueue-ks \
-      --create-namespace --namespace kueue-ks-system 
+       oci://ghcr.io/kubestellar/galaxy/kueue-ks-chart \
+       --version ${KUEUE_KS_VERSION} \
+       --create-namespace --namespace kueue-ks-system 
     
 
