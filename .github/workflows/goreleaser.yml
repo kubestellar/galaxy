@@ -85,7 +85,7 @@ jobs:
       run: |
         chartVersion=$(echo ${{ github.ref_name }} | cut -c 2-)
         sed -i.bk -e "s|image_placeholder|${{ env.REGISTRY }}/${{ env.REPO }}/suspend-webhook|g" \
-        -e "s|tag_placeholder|${{github.ref_name}}|g" \
+        -e "s|tag_placeholder|${chartVersion}|g" \
         ${{ env.CHARTS_PATH }}/suspend-webhook/values.yaml
         helm package ${{ env.CHARTS_PATH }}/suspend-webhook --destination . --version ${chartVersion} --app-version ${chartVersion}
         helm push ./suspend-webhook-chart-${chartVersion}.tgz oci://${{ env.REGISTRY }}/${{ env.REPO }}
