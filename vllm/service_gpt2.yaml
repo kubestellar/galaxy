@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpt2
+  labels:
+    app: gpt2
+spec:
+  type: NodePort
+  ports:
+  - nodePort: 30081
+    port: 80
+    protocol: TCP
+    targetPort: 8000
+  selector:
+    app: gpt2

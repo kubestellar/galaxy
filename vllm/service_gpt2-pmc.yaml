@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpt2-pmc
+  labels:
+    app: gpt2-pmc
+spec:
+  type: NodePort
+  ports:
+  - nodePort: 30082
+    port: 80
+    protocol: TCP
+    targetPort: 8000
+  selector:
+    app: gpt2-pmc
