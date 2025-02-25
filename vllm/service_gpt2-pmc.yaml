@@ -4,6 +4,8 @@ metadata:
   name: gpt2-pmc
   labels:
     app: gpt2-pmc
+  annotations:
+    control.kubestellar.io/preserve: "nodeport"
 spec:
   type: NodePort
   ports:

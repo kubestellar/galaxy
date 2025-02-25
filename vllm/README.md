@@ -35,10 +35,8 @@ kubectl --context cluster1 get all
 ```
 
 Expose the Deployment as a Service.
-Then edit the Service's nodePort.
 ```shell
 kubectl --context wds1 apply -f ./vllm/service_gpt2.yaml
-kubectl --context cluster1 edit svc gpt2 # nodeport should be 30081
 ```
 
 List the model.
@@ -69,15 +67,13 @@ curl -s http://localhost:30081/v1/completions \
   | jq .choices[0].text
 ```
 
-Take similar steps to dispatch the second vLLM instance to cluster2.
+Take similar steps to dispatch the second vLLM instance to cluster2 and expose it as a Service.
 ```shell
 kubectl --context wds1 apply -f ./vllm/deployment_gpt2-pmc.yaml
 kubectl --context wds1 apply -f ./vllm/bp_gpt2-pmc.yaml
 kubectl --context cluster2 wait --for=condition=available --timeout=90s deployment/gpt2-pmc
 kubectl --context cluster2 get all
-
 kubectl --context wds1 apply -f ./vllm/service_gpt2-pmc.yaml
-kubectl --context cluster2 edit svc gpt2-pmc # nodeport should be 30082
 ```
 
 List model and inference.
