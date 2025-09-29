@@ -3,7 +3,7 @@ This is an experiment to use vLLM as KuberStellar's workloads.
 
 Below is a simplified overview of the experiment.
 The overview shows one KubeStellar WDS, wds1; and two KubeStelalr WECs, cluster1 and cluster2.
-KuberStellar has a nice [Getting Started](https://docs.kubestellar.io/unreleased-development/direct/get-started/) guide on how to setup such an envrionment.
+KubeStellar has a nice [Getting Started](https://docs.kubestellar.io/unreleased-development/direct/get-started/) guide on how to setup such an envrionment.
 
 Two configuration files for the two WECs are available here as [cluster1.yaml](./cluster1.yaml) and [cluster2.yaml](./cluster2.yaml), if one wants to conveniently access the Kubernetes Services inside the WECs, please create the WECs from the configuration files.
 ```shell
