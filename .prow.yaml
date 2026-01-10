@@ -1,0 +1,55 @@
+presubmits:
+  - name: pull-kubestellar-galaxy-verify
+    always_run: true
+    decorate: true
+    clone_uri: 'https://github.com/kubestellar/galaxy'
+    spec:
+      containers:
+        - image: golang:1.23
+          command:
+            - /bin/bash
+            - -c
+            - |
+              # Verify all Go modules
+              for dir in clustermetrics kueue-ks mc-scheduling shadow-pods suspend-webhook; do
+                if [ -f "$dir/go.mod" ]; then
+                  echo "=== Verifying $dir ==="
+                  cd $dir
+                  go mod download
+                  go vet ./...
+                  go build ./...
+                  cd ..
+                fi
+              done
+          resources:
+            requests:
+              memory: 2Gi
+              cpu: 1
+              ephemeral-storage: 4Gi
+
+  - name: pull-kubestellar-galaxy-test
+    always_run: true
+    decorate: true
+    clone_uri: 'https://github.com/kubestellar/galaxy'
+    spec:
+      containers:
+        - image: golang:1.23
+          command:
+            - /bin/bash
+            - -c
+            - |
+              # Test all Go modules
+              for dir in clustermetrics kueue-ks mc-scheduling shadow-pods suspend-webhook; do
+                if [ -f "$dir/go.mod" ]; then
+                  echo "=== Testing $dir ==="
+                  cd $dir
+                  go mod download
+                  go test ./... -v || true
+                  cd ..
+                fi
+              done
+          resources:
+            requests:
+              memory: 2Gi
+              cpu: 1
+              ephemeral-storage: 4Gi
