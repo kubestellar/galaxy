@@ -48,7 +48,7 @@ jobs:
 
       - name: Build image
         run: |
-          docker build -f ${{ matrix.component }}/Dockerfile -t local/${{ matrix.component }}:${{ github.sha }} .
+          docker build -t local/${{ matrix.component }}:${{ github.sha }} ${{ matrix.component }}
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@0.33.1
