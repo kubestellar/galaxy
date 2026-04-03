@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpt2
+  namespace: default
+  labels:
+    app: gpt2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpt2
+  template:
+    metadata:
+      labels:
+        app: gpt2
+    spec:
+      volumes:
+      # vLLM needs to access the host's shared memory for tensor parallel inference.
+      - name: shm
+        emptyDir:
+          medium: Memory
+          sizeLimit: "2Gi"
+      containers:
+      - name: gpt2
+        image: docker.io/library/vllm-cpu-env:latest
+        imagePullPolicy: IfNotPresent
+        command: ["python3", "-m", "vllm.entrypoints.openai.api_server"]
+        args: ["--model", "openai-community/gpt2"]
+        ports:
+        - containerPort: 8000
+        resources:
+          limits:
+            cpu: "10"
+            memory: 20G
+            # nvidia.com/gpu: "1"
+          requests:
+            cpu: "1"
+            memory: 4G
+            # nvidia.com/gpu: "1"
+        volumeMounts:
+        - name: shm
+          mountPath: /dev/shm
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 5

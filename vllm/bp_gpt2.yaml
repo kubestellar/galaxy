@@ -1,0 +1,10 @@
+apiVersion: control.kubestellar.io/v1alpha1
+kind: BindingPolicy
+metadata:
+  name: gpt2
+spec:
+  clusterSelectors:
+  - matchLabels: {"name":"cluster1"}
+  downsync:
+  - objectSelectors:
+    - matchLabels: {"app":"gpt2"}
